@@ -1,0 +1,19 @@
+[build-system]
+requires = ["maturin>=1.12.4,<2"]
+build-backend = "maturin"
+
+[project]
+name = "rsharpier"
+description = "A Rust port of CSharpier, the opinionated C# formatter"
+requires-python = ">=3.8"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+dynamic = ["version"]
+
+[project.urls]
+Repository = "https://github.com/vivainio/rsharpier"
+Issues = "https://github.com/vivainio/rsharpier/issues"
+
+[tool.maturin]
+bindings = "bin"

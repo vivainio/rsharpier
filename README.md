@@ -6,6 +6,10 @@ It parses with [tree-sitter](https://tree-sitter.github.io/) (a patched copy of
 produces the same output as CSharpier for the formatting tests of the .NET version.
 
 ```
+uvx rsharpier format .           # or: uv tool install rsharpier / pip install rsharpier
+```
+
+```
 rsharpier format [paths...]      # format files and directories
 rsharpier check [paths...]       # exit with 1 if something is not formatted
 echo 'class  A{}' | rsharpier format

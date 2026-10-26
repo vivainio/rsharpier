@@ -1641,7 +1641,14 @@ pub(super) fn parameter(ctx: &mut Ctx, node: Node) -> Doc {
             docs.push(Doc::indent_of(Doc::line()));
         }
     }
-    let mods = modifiers(node);
+    // modifiers like this, ref, out, in, params, scoped come before the type
+    let ty_start = field(node, "type").map(|t| t.start_byte());
+    let name_start = field(node, "name").map(|t| t.start_byte());
+    let stop = ty_start.or(name_start).unwrap_or(usize::MAX);
+    let mods: Vec<Node> = children(node)
+        .into_iter()
+        .filter(|c| c.start_byte() < stop && c.kind() != "attribute_list")
+        .collect();
     if !mods.is_empty() {
         let printed: Vec<Doc> = mods.iter().map(|m| print_token(ctx, *m)).collect();
         docs.push(group!(Doc::join(Doc::text(" "), printed), " "));
@@ -2348,19 +2355,36 @@ fn enum_declaration(ctx: &mut Ctx, node: Node) -> Doc {
 
 pub(super) fn base_list(ctx: &mut Ctx, bl: Node) -> Doc {
     let kids = children(bl);
-    let (items, seps) = list_parts(bl, false);
     let colon = kids[0];
+    // `Base(args)` is an identifier followed by an argument list in classes
+    let items: Vec<Node> = kids[1..]
+        .iter()
+        .copied()
+        .filter(|c| !matches!(c.kind(), "," | "argument_list"))
+        .collect();
+    let seps: Vec<Node> = kids[1..].iter().copied().filter(|c| c.kind() == ",").collect();
     let rest = if items.len() > 1 {
         Doc::indent(vec![
             print_token(ctx, seps[0]),
             Doc::line(),
-            separated_list(ctx, &items, &seps, print, Doc::line(), 1),
+            separated_list(ctx, &items, &seps, base_type, Doc::line(), 1),
         ])
     } else {
         Doc::Null
     };
-    let base_list_doc = concat![print_token(ctx, colon), " ", print(ctx, items[0]), rest];
+    let base_list_doc = concat![print_token(ctx, colon), " ", base_type(ctx, items[0]), rest];
     group!(indent!(Doc::line(), base_list_doc))
+}
+
+fn base_type(ctx: &mut Ctx, node: Node) -> Doc {
+    let parent = node.parent().unwrap();
+    let siblings = children(parent);
+    let pos = siblings.iter().position(|c| c.id() == node.id()).unwrap();
+    let ty = print(ctx, node);
+    match siblings.get(pos + 1) {
+        Some(next) if next.kind() == "argument_list" => concat![ty, exprs::argument_list(ctx, *next)],
+        _ => ty,
+    }
 }
 
 fn anonymous_object_creation(ctx: &mut Ctx, node: Node) -> Doc {

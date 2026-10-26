@@ -47,6 +47,8 @@ export default grammar({
     [$.constant_pattern, $.non_lvalue_expression, $._access_target],
     [$.constant_pattern, $._expression_statement_expression, $._access_target],
     [$.non_lvalue_expression, $._expression_statement_expression, $._access_target],
+    [$.non_lvalue_expression, $.lvalue_expression, $._access_target],
+    [$.non_lvalue_expression, $.lvalue_expression],
     [$._expression_statement_expression, $._access_target],
     [$.expression, $._access_target],
     [$.non_lvalue_expression, $._access_target],
@@ -621,7 +623,7 @@ export default grammar({
 
     bracketed_parameter_list: $ => seq(
       '[',
-      sep(choice($.parameter, $._parameter_array), ','),
+      sep(choice($.parameter, alias($._parameter_array, $.parameter)), ','),
       ']',
     ),
 
@@ -650,7 +652,7 @@ export default grammar({
 
     parameter_list: $ => seq(
       '(',
-      sep(choice($.parameter, $._parameter_array), ','),
+      sep(choice($.parameter, alias($._parameter_array, $.parameter)), ','),
       ')',
     ),
 
@@ -1406,6 +1408,7 @@ export default grammar({
     lvalue_expression: $ => choice(
       'this',
       $.member_access_expression,
+      $.conditional_access_expression,
       $.tuple_expression,
       $._simple_name,
       $.element_access_expression,

@@ -2572,8 +2572,13 @@
                       "name": "parameter"
                     },
                     {
-                      "type": "SYMBOL",
-                      "name": "_parameter_array"
+                      "type": "ALIAS",
+                      "content": {
+                        "type": "SYMBOL",
+                        "name": "_parameter_array"
+                      },
+                      "named": true,
+                      "value": "parameter"
                     }
                   ]
                 },
@@ -2594,8 +2599,13 @@
                             "name": "parameter"
                           },
                           {
-                            "type": "SYMBOL",
-                            "name": "_parameter_array"
+                            "type": "ALIAS",
+                            "content": {
+                              "type": "SYMBOL",
+                              "name": "_parameter_array"
+                            },
+                            "named": true,
+                            "value": "parameter"
                           }
                         ]
                       }
@@ -2764,8 +2774,13 @@
                       "name": "parameter"
                     },
                     {
-                      "type": "SYMBOL",
-                      "name": "_parameter_array"
+                      "type": "ALIAS",
+                      "content": {
+                        "type": "SYMBOL",
+                        "name": "_parameter_array"
+                      },
+                      "named": true,
+                      "value": "parameter"
                     }
                   ]
                 },
@@ -2786,8 +2801,13 @@
                             "name": "parameter"
                           },
                           {
-                            "type": "SYMBOL",
-                            "name": "_parameter_array"
+                            "type": "ALIAS",
+                            "content": {
+                              "type": "SYMBOL",
+                              "name": "_parameter_array"
+                            },
+                            "named": true,
+                            "value": "parameter"
                           }
                         ]
                       }
@@ -6994,6 +7014,10 @@
         {
           "type": "SYMBOL",
           "name": "member_access_expression"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "conditional_access_expression"
         },
         {
           "type": "SYMBOL",
@@ -12466,6 +12490,15 @@
       "non_lvalue_expression",
       "_expression_statement_expression",
       "_access_target"
+    ],
+    [
+      "non_lvalue_expression",
+      "lvalue_expression",
+      "_access_target"
+    ],
+    [
+      "non_lvalue_expression",
+      "lvalue_expression"
     ],
     [
       "_expression_statement_expression",

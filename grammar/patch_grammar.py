@@ -82,6 +82,12 @@ rep("    list_pattern: $ => prec.right(seq(", "    slice_pattern: $ => prec.righ
 
 rep("      $.and_pattern,\n      $.list_pattern,", "      $.and_pattern,\n      prec.dynamic(5, $.list_pattern),")
 
+# `params` parameters are parameters
+rep("sep(choice($.parameter, $._parameter_array), ','),", "sep(choice($.parameter, alias($._parameter_array, $.parameter)), ','),", 2)
+
+# null-conditional assignment: a?.b = c
+rep("      'this',\n      $.member_access_expression,\n      $.tuple_expression,", "      'this',\n      $.member_access_expression,\n      $.conditional_access_expression,\n      $.tuple_expression,")
+
 open("tree-sitter-c-sharp/grammar.js", "w").write(s)
 
 for i in range(30):

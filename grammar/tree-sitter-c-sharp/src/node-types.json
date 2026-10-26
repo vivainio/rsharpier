@@ -138,6 +138,10 @@
     "named": true,
     "subtypes": [
       {
+        "type": "conditional_access_expression",
+        "named": true
+      },
+      {
         "type": "element_access_expression",
         "named": true
       },
@@ -1421,42 +1425,13 @@
   {
     "type": "bracketed_parameter_list",
     "named": true,
-    "fields": {
-      "name": {
-        "multiple": true,
-        "required": false,
-        "types": [
-          {
-            "type": "identifier",
-            "named": true
-          }
-        ]
-      },
-      "type": {
-        "multiple": true,
-        "required": false,
-        "types": [
-          {
-            "type": "type",
-            "named": true
-          }
-        ]
-      }
-    },
+    "fields": {},
     "children": {
       "multiple": true,
       "required": false,
       "types": [
         {
-          "type": "attribute_list",
-          "named": true
-        },
-        {
           "type": "parameter",
-          "named": true
-        },
-        {
-          "type": "preproc_if_in_attribute_list",
           "named": true
         }
       ]
@@ -1788,10 +1763,6 @@
           },
           {
             "type": "checked_expression",
-            "named": true
-          },
-          {
-            "type": "conditional_access_expression",
             "named": true
           },
           {
@@ -4419,42 +4390,13 @@
   {
     "type": "parameter_list",
     "named": true,
-    "fields": {
-      "name": {
-        "multiple": true,
-        "required": false,
-        "types": [
-          {
-            "type": "identifier",
-            "named": true
-          }
-        ]
-      },
-      "type": {
-        "multiple": true,
-        "required": false,
-        "types": [
-          {
-            "type": "type",
-            "named": true
-          }
-        ]
-      }
-    },
+    "fields": {},
     "children": {
       "multiple": true,
       "required": false,
       "types": [
         {
-          "type": "attribute_list",
-          "named": true
-        },
-        {
           "type": "parameter",
-          "named": true
-        },
-        {
-          "type": "preproc_if_in_attribute_list",
           "named": true
         }
       ]

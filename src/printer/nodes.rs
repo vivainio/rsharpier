@@ -817,7 +817,16 @@ pub(super) fn attribute_list(ctx: &mut Ctx, node: Node) -> Doc {
     let kids = children(node);
     let open = kids[0];
     let close = *kids.last().unwrap();
-    let mut docs = vec![print_token(ctx, open)];
+    let mut docs = Vec::new();
+    if node.kind() == "global_attribute" {
+        let first = children(node.parent().unwrap())
+            .into_iter()
+            .find(|c| c.kind() == "global_attribute");
+        if first.map(|f| f.id()) != Some(node.id()) {
+            docs.push(extra_new_lines(ctx, node));
+        }
+    }
+    docs.push(print_token(ctx, open));
     let mut rest: Vec<Node> = kids[1..kids.len() - 1].to_vec();
     // the target is either a node, or (for assembly and module) bare keyword tokens
     while let Some(t) = rest.first().copied() {
@@ -1218,6 +1227,9 @@ pub(super) fn method_declaration(ctx: &mut Ctx, node: Node) -> Doc {
     let mut docs = Vec::new();
     let mut decl = Vec::new();
 
+    if node.kind() == "local_function_statement" {
+        docs.push(extra_new_lines(ctx, node));
+    }
     if !children_of_kind(node, "attribute_list").is_empty() {
         docs.push(print_attribute_lists(ctx, node));
     }

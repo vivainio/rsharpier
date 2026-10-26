@@ -12,6 +12,7 @@ pub struct PrinterOptions {
     pub indent_size: usize,
     pub use_tabs: bool,
     pub trim_initial_lines: bool,
+    pub include_generated: bool,
 }
 
 impl Default for PrinterOptions {
@@ -21,6 +22,7 @@ impl Default for PrinterOptions {
             indent_size: 4,
             use_tabs: false,
             trim_initial_lines: true,
+            include_generated: false,
         }
     }
 }

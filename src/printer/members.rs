@@ -68,7 +68,7 @@ fn print_impl(
             blank_line_is_forced = false;
         }
 
-        let mut get_separator = |ctx: &mut Ctx| -> Doc {
+        let get_separator = |ctx: &mut Ctx| -> Doc {
             let Some((seps, close)) = enum_info else { return Doc::Null };
             if member_index < seps.len() {
                 return print_token(ctx, seps[member_index]);
@@ -85,7 +85,10 @@ fn print_impl(
         if member_index == 0 {
             last_member_forced_blank_line = blank_line_is_forced;
             result.push(nodes::print(ctx, member));
-            result.push(get_separator(ctx));
+            let sep = get_separator(ctx);
+            if !matches!(sep, Doc::Null) {
+                result.push(sep);
+            }
             continue;
         }
 
@@ -164,7 +167,9 @@ fn print_impl(
         let separator = get_separator(ctx);
         result.push(Doc::hard_line());
         result.push(nodes::print(ctx, member));
-        result.push(separator);
+        if !matches!(separator, Doc::Null) {
+            result.push(separator);
+        }
 
         last_member_forced_blank_line = blank_line_is_forced;
     }

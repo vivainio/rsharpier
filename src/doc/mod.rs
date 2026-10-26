@@ -355,3 +355,70 @@ macro_rules! group {
 macro_rules! indent {
     ($($d:expr),* $(,)?) => { $crate::doc::Doc::indent(vec![$($crate::doc::Doc::from($d)),*]) };
 }
+
+impl Doc {
+    /// Debug rendering of the doc tree, like CSharpier's DocSerializer
+    pub fn dump(&self) -> String {
+        let mut out = String::new();
+        self.dump_into(&mut out, 0);
+        out
+    }
+
+    fn dump_into(&self, out: &mut String, depth: usize) {
+        let pad = "  ".repeat(depth);
+        let line = |out: &mut String, s: String| {
+            out.push_str(&pad);
+            out.push_str(&s);
+            out.push('\n');
+        };
+        match self {
+            Doc::Null => line(out, "Null".into()),
+            Doc::Str(s) => line(out, format!("{:?}{}", s.value, if s.is_directive { " (directive)" } else { "" })),
+            Doc::Concat(c) => {
+                line(out, "Concat".into());
+                for d in c.borrow().iter() {
+                    d.dump_into(out, depth + 1);
+                }
+            }
+            Doc::Line(l) => line(
+                out,
+                format!(
+                    "{}{}{:?}{}",
+                    if l.is_literal { "LiteralLine " } else if l.is_hard_line { "HardLine " } else { "Line " },
+                    if l.is_for_trivia { "ForTrivia " } else { "" },
+                    l.ty,
+                    if l.squash { " squash" } else { "" }
+                ),
+            ),
+            Doc::Group(g) => {
+                line(out, format!("Group{}{}", g.id.map(|i| format!(" id={i}")).unwrap_or_default(), if g.options.is_some() { " conditional" } else { "" }));
+                match &g.options {
+                    Some(o) => o.iter().for_each(|d| d.dump_into(out, depth + 1)),
+                    None => g.contents.dump_into(out, depth + 1),
+                }
+            }
+            Doc::Indent(c) => {
+                line(out, "Indent".into());
+                c.dump_into(out, depth + 1);
+            }
+            Doc::Trim => line(out, "Trim".into()),
+            Doc::IfBreak(i) => {
+                line(out, format!("IfBreak{}", i.group_id.map(|g| format!(" id={g}")).unwrap_or_default()));
+                i.break_contents.dump_into(out, depth + 1);
+                i.flat_contents.dump_into(out, depth + 1);
+            }
+            Doc::BreakParent => line(out, "BreakParent".into()),
+            Doc::LeadingComment(c) => line(out, format!("LeadingComment {:?}", c.comment)),
+            Doc::TrailingComment(c) => line(out, format!("TrailingComment {:?}", c.comment)),
+            Doc::ForceFlat(c) => {
+                line(out, "ForceFlat".into());
+                c.dump_into(out, depth + 1);
+            }
+            Doc::Region(r) => line(out, format!("Region {:?}", r.text)),
+            Doc::AlwaysFits(c) => {
+                line(out, "AlwaysFits".into());
+                c.dump_into(out, depth + 1);
+            }
+        }
+    }
+}

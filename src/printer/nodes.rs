@@ -147,7 +147,8 @@ pub fn print(ctx: &mut Ctx, node: Node) -> Doc {
         "identifier" | "predefined_type" | "implicit_type" | "integer_literal" | "real_literal"
         | "string_literal" | "verbatim_string_literal" | "raw_string_literal"
         | "character_literal" | "boolean_literal" | "null_literal" | "this_expression"
-        | "interpolated_string_expression" | "modifier" | "discard" => print_token(ctx, node),
+        | "modifier" | "discard" => print_token(ctx, node),
+        "interpolated_string_expression" => strings::interpolated_string_expression(ctx, node),
         "throw_expression" => {
             let kids = children(node);
             concat![print_token_with_suffix(ctx, kids[0], " "), print(ctx, kids[1])]
@@ -1029,6 +1030,11 @@ pub(super) fn type_parameter(ctx: &mut Ctx, node: Node) -> Doc {
 pub(super) fn type_argument_list(ctx: &mut Ctx, node: Node) -> Doc {
     let kids = children(node);
     let (items, seps) = list_parts(node, true);
+    if items.is_empty() {
+        // open generic: <,>
+        let docs: Vec<Doc> = kids.iter().map(|k| print_token(ctx, *k)).collect();
+        return Doc::concat(docs);
+    }
     let has_generic = items.iter().any(|i| i.kind() == "generic_name");
     let separator = if items.first().map(|i| i.kind()) != Some("omitted_type_argument")
         && (items.len() > 1 || has_generic)
@@ -1347,7 +1353,7 @@ pub(super) fn parameter(ctx: &mut Ctx, node: Node) -> Doc {
     if has_attribute {
         docs.push(print_attribute_lists(ctx, node));
         let attr_count = children_of_kind(node, "attribute_list").len();
-        let in_empty_list = node.parent().map(|p| children(p).len() == 3).unwrap_or(false);
+        let in_empty_list = false;
         if attr_count < 2 && (ctx.leading_trivia(node).any_comment() || in_empty_list) {
             docs.push(Doc::text(" "));
         } else {
@@ -1842,6 +1848,11 @@ fn determine_layout(ctx: &Ctx, left_node: Node, right: Node) -> Layout {
         return Layout::BreakAfterOperator;
     }
     let rk = right.kind();
+    if (rk == "raw_string_literal" && ctx.text(right).contains('\n'))
+        || strings::is_raw_interpolated_multiline(ctx, right)
+    {
+        return Layout::BasicConcatWithSpace;
+    }
     if rk == "object_creation_expression"
         && field(right, "type").map(|t| t.kind() == "generic_name").unwrap_or(false)
         && field(right, "arguments").map(|a| children(a).len() == 2).unwrap_or(true)
@@ -1859,7 +1870,7 @@ fn determine_layout(ctx: &Ctx, left_node: Node, right: Node) -> Layout {
         return Layout::BreakAfterOperator;
     }
     match rk {
-        "collection_expression" | "raw_string_literal" => Layout::BasicConcatWithSpace,
+        "collection_expression" => Layout::BasicConcatWithSpace,
         "initializer_expression" => Layout::BasicConcatWithoutLine,
         "binary_expression" | "interpolated_string_expression" | "is_pattern_expression"
         | "string_literal" | "verbatim_string_literal" | "integer_literal" | "real_literal"

@@ -73,7 +73,15 @@ fn sorted_token_texts(src: &str, symbols: &[String]) -> Result<Vec<String>, Form
         .list
         .iter()
         .filter(|t| t.end > t.start)
-        .map(|t| src[t.start..t.end].to_string())
+        .map(|t| {
+            let text = &src[t.start..t.end];
+            if text.contains('\n') {
+                // multi line strings are re-indented, so only compare their content
+                text.replace('\r', "").split('\n').map(|l| l.trim()).collect::<Vec<_>>().join("\n")
+            } else {
+                text.to_string()
+            }
+        })
         // trailing commas are added and removed by the formatter
         .filter(|t| t != ",")
         .collect();

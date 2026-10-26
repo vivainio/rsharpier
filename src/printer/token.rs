@@ -79,10 +79,11 @@ pub fn print_token_with(ctx: &mut Ctx, node: Node, suffix: Doc, opts: TokenOptio
     };
 
     let text = &ctx.src[token.start..token.end];
-    let is_verbatim = node.kind() == "verbatim_string_literal"
-        || (node.kind() == "interpolated_string_expression" && text.starts_with("$@"));
+    let is_verbatim = node.kind() == "verbatim_string_literal";
 
-    let token_doc = if is_verbatim && text.contains('\n') {
+    let token_doc = if node.kind() == "raw_string_literal" && text.contains('\n') {
+        super::strings::raw_string_literal_doc(node, text)
+    } else if is_verbatim && text.contains('\n') {
         let lines: Vec<Doc> = text
             .replace('\r', "")
             .split('\n')

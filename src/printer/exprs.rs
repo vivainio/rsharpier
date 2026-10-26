@@ -617,6 +617,8 @@ pub fn collection_expression(ctx: &mut Ctx, node: Node) -> Doc {
             !matches!(gp_kind, "object_creation_expression" | "initializer_expression" | "expression_statement")
         }
         "variable_declarator" => false,
+        // an equals value clause of a property
+        "property_declaration" => true,
         "equals_value_clause" => gp_kind != "variable_declarator",
         _ => false,
     };
@@ -624,9 +626,11 @@ pub fn collection_expression(ctx: &mut Ctx, node: Node) -> Doc {
     let always_break = items
         .first()
         .map(|i| {
-            let k = children(*i);
-            i.kind() == "collection_expression"
-                || (i.kind() == "expression_element" && k.len() == 1 && k[0].kind() == "collection_expression")
+            let mut n = *i;
+            while matches!(n.kind(), "collection_element" | "expression_element") {
+                n = children(n)[0];
+            }
+            n.kind() == "collection_expression"
         })
         .unwrap_or(false);
 

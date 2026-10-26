@@ -84,11 +84,14 @@ impl TriviaListExt for [Trivia] {
         self.iter().any(|t| t.is_comment() || t.is_directive())
     }
     fn index_of_next_end_of_line(&self, start: usize) -> Option<usize> {
-        self.iter()
-            .enumerate()
-            .skip(start + 1)
-            .find(|(_, t)| t.kind == TriviaKind::EndOfLine)
-            .map(|(i, _)| i)
+        for (i, t) in self.iter().enumerate().skip(start + 1) {
+            match t.kind {
+                TriviaKind::Whitespace => continue,
+                TriviaKind::EndOfLine => return Some(i),
+                _ => return None,
+            }
+        }
+        None
     }
 }
 
@@ -442,7 +445,7 @@ fn is_atomic(kind: &str) -> bool {
             | "verbatim_string_literal"
             | "raw_string_literal"
             | "character_literal"
-            | "interpolated_string_expression"
+            | "interpolation_format_clause"
     )
 }
 

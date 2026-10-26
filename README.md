@@ -5,6 +5,12 @@ It parses with [tree-sitter](https://tree-sitter.github.io/) (a patched copy of
 [tree-sitter-c-sharp](https://github.com/tree-sitter/tree-sitter-c-sharp)) instead of Roslyn and
 produces the same output as CSharpier for the formatting tests of the .NET version.
 
+The goal is to produce output identical to CSharpier: any formatting deviation is a bug.
+rsharpier aims to be a faster, zero-dependency version of CSharpier.
+CSharpier is the upstream reference, so new features will land there first and be ported here.
+It also uses the Roslyn C# compiler, which is a more authoritative source for C# syntax than
+our patched tree-sitter parser.
+
 ```
 uvx rsharpier format .           # or: uv tool install rsharpier / pip install rsharpier
 ```

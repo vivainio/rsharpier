@@ -21,6 +21,22 @@ pub enum FormatError {
     Validation(String),
 }
 
+/// The preprocessed source and the tree of its masked version, which is what gets printed.
+struct Analysis {
+    pre: trivia::Preprocessed,
+    masked: String,
+    tree: tree_sitter::Tree,
+}
+
+/// `src_tree` is the tree of `src` itself. When masking changes nothing it is reused instead of parsing again.
+fn analyze(src: &str, src_tree: &tree_sitter::Tree, symbols: &[String]) -> Analysis {
+    let protected = trivia::protected_ranges(src_tree.root_node());
+    let pre = trivia::preprocess(src, &protected, symbols);
+    let masked = pre.mask(src);
+    let tree = if masked == src { src_tree.clone() } else { parse(&masked) };
+    Analysis { pre, masked, tree }
+}
+
 fn parse(src: &str) -> tree_sitter::Tree {
     let mut parser = Parser::new();
     parser
@@ -70,16 +86,11 @@ pub fn line_ending(code: &str) -> &'static str {
 
 /// All token texts of `src` as parsed with `symbols`, sorted so that reordering usings and
 /// modifiers is not reported as a difference.
-fn sorted_token_texts(src: &str, symbols: &[String]) -> Result<Vec<String>, FormatError> {
-    let tree = parse(src);
-    let protected = trivia::protected_ranges(tree.root_node());
-    let pre = trivia::preprocess(src, &protected, symbols);
-    let masked = pre.mask(src);
-    let tree = parse(&masked);
-    if let Some(e) = first_error(&masked, tree.root_node()) {
+fn sorted_token_texts(src: &str, a: &Analysis) -> Result<Vec<String>, FormatError> {
+    if let Some(e) = first_error(&a.masked, a.tree.root_node()) {
         return Err(FormatError::Syntax(e));
     }
-    let tokens = trivia::build_tokens(src, tree.root_node(), &pre);
+    let tokens = trivia::build_tokens(src, a.tree.root_node(), &a.pre);
     let mut texts: Vec<String> = tokens
         .list
         .iter()
@@ -100,9 +111,10 @@ fn sorted_token_texts(src: &str, symbols: &[String]) -> Result<Vec<String>, Form
     Ok(texts)
 }
 
-fn validate(original: &str, formatted: &str, symbols: &[String]) -> Result<(), FormatError> {
-    let before = sorted_token_texts(original, symbols)?;
-    let after = match sorted_token_texts(formatted, symbols) {
+fn validate(original: &str, before: &Analysis, formatted: &str, symbols: &[String]) -> Result<(), FormatError> {
+    let before = sorted_token_texts(original, before)?;
+    let formatted_tree = parse(formatted);
+    let after = match sorted_token_texts(formatted, &analyze(formatted, &formatted_tree, symbols)) {
         Ok(a) => a,
         Err(FormatError::Syntax(e)) => {
             return Err(FormatError::Validation(format!("formatted code does not parse: {e}")))
@@ -141,7 +153,9 @@ pub fn format_with_symbols(
     options: &PrinterOptions,
     symbols: &[String],
 ) -> Result<FormatResult, FormatError> {
-    format_with_symbols_validated(src, options, symbols, true)
+    let src_tree = parse(src);
+    let analysis = analyze(src, &src_tree, symbols);
+    format_with_symbols_validated(src, options, symbols, true, analysis)
 }
 
 fn format_with_symbols_validated(
@@ -149,18 +163,14 @@ fn format_with_symbols_validated(
     options: &PrinterOptions,
     symbols: &[String],
     validate_output: bool,
+    analysis: Analysis,
 ) -> Result<FormatResult, FormatError> {
-    let tree = parse(src);
-    let protected = trivia::protected_ranges(tree.root_node());
-    let pre = trivia::preprocess(src, &protected, symbols);
-    let masked = pre.mask(src);
-    let tree = parse(&masked);
-    let root = tree.root_node();
-    if let Some(e) = first_error(&masked, root) {
+    let root = analysis.tree.root_node();
+    if let Some(e) = first_error(&analysis.masked, root) {
         return Err(FormatError::Syntax(e));
     }
 
-    let tokens = trivia::build_tokens(src, root, &pre);
+    let tokens = trivia::build_tokens(src, root, &analysis.pre);
     let mut ctx = Ctx {
         src,
         tokens: &tokens,
@@ -182,7 +192,7 @@ fn format_with_symbols_validated(
     }
     let code = doc::print(&doc, options, get_line_ending(src, options));
     if validate_output && std::env::var_os("CSHARPIER_NO_VALIDATE").is_none() {
-        validate(src, &code, symbols)?;
+        validate(src, &analysis, &code, symbols)?;
     }
     Ok(FormatResult {
         code,
@@ -197,19 +207,21 @@ pub fn format(src: &str, options: &PrinterOptions) -> Result<FormatResult, Forma
 }
 
 pub fn format_with(src: &str, options: &PrinterOptions, validate_output: bool) -> Result<FormatResult, FormatError> {
-    if !options.include_generated && begins_with_auto_generated_comment(src) {
+    let src_tree = parse(src);
+    let analysis = analyze(src, &src_tree, &[]);
+    if !options.include_generated && begins_with_auto_generated_comment(src, &analysis) {
         return Ok(FormatResult {
             code: src.to_string(),
             unhandled: vec![],
         });
     }
-    let mut result = format_with_symbols_validated(src, options, &[], validate_output)?;
+    let sets = crate::symbols::get_sets(&analysis.pre.events);
+    let mut result = format_with_symbols_validated(src, options, &[], validate_output, analysis)?;
 
-    let tree = parse(src);
-    let protected = trivia::protected_ranges(tree.root_node());
-    let pre = trivia::preprocess(src, &protected, &[]);
-    for set in crate::symbols::get_sets(&pre.events) {
-        let next = format_with_symbols_validated(&result.code, options, &set, validate_output)?;
+    for set in sets {
+        let tree = parse(&result.code);
+        let analysis = analyze(&result.code, &tree, &set);
+        let next = format_with_symbols_validated(&result.code, options, &set, validate_output, analysis)?;
         result.code = next.code;
         result.unhandled.extend(next.unhandled);
     }
@@ -217,13 +229,8 @@ pub fn format_with(src: &str, options: &PrinterOptions, validate_output: bool) -
 }
 
 /// Port of GeneratedCodeUtilities.BeginsWithAutoGeneratedComment
-fn begins_with_auto_generated_comment(src: &str) -> bool {
-    let tree = parse(src);
-    let protected = trivia::protected_ranges(tree.root_node());
-    let pre = trivia::preprocess(src, &protected, &[]);
-    let masked = pre.mask(src);
-    let tree = parse(&masked);
-    let tokens = trivia::build_tokens(src, tree.root_node(), &pre);
+fn begins_with_auto_generated_comment(src: &str, a: &Analysis) -> bool {
+    let tokens = trivia::build_tokens(src, a.tree.root_node(), &a.pre);
     tokens.list[0].leading.iter().any(|t| {
         matches!(
             t.kind,

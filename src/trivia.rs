@@ -23,6 +23,8 @@ pub enum DirectiveKind {
     EndRegion,
     PragmaWarning,
     PragmaChecksum,
+    Define,
+    Undef,
     Other,
 }
 
@@ -158,6 +160,8 @@ fn directive_kind(line: &str) -> DirectiveKind {
         "endif" => DirectiveKind::EndIf,
         "region" => DirectiveKind::Region,
         "endregion" => DirectiveKind::EndRegion,
+        "define" => DirectiveKind::Define,
+        "undef" => DirectiveKind::Undef,
         "pragma" => {
             let after = rest["pragma".len()..].trim_start();
             if after.starts_with("checksum") {
@@ -254,7 +258,7 @@ pub fn preprocess(src: &str, protected: &[(usize, usize)], symbols: &[String]) -
                 result.events.push(crate::symbols::Event::EndIf);
                 frames.pop();
             }
-            DirectiveKind::Other => {
+            DirectiveKind::Other | DirectiveKind::Define | DirectiveKind::Undef => {
                 if active_now(&frames) {
                     let rest = trimmed.trim_start_matches('#').trim_start();
                     if let Some(sym) = rest.strip_prefix("define") {

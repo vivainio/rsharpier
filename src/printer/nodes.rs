@@ -336,7 +336,28 @@ pub(super) fn separated_list_with_closing(
     closing: Option<Node>,
 ) -> Doc {
     let mut docs = Vec::new();
+    let mut unformatted = String::new();
+    let mut print_unformatted = false;
     for x in starting_index..items.len() {
+        if ignore::node_matches(ctx, items[x], ignore::IgnoreKind::End) {
+            docs.push(Doc::text(unformatted.trim().to_string()));
+            unformatted.clear();
+            print_unformatted = false;
+        } else if ignore::node_matches(ctx, items[x], ignore::IgnoreKind::Start) {
+            if !print_unformatted && x > 0 {
+                docs.push(Doc::hard_line());
+            }
+            print_unformatted = true;
+        }
+        if print_unformatted {
+            unformatted.push_str(&ignore::print_node_without_formatting(ctx, items[x]));
+            if x < seps.len() {
+                unformatted.push_str(ignore::full_text(ctx, seps[x]).trim());
+                unformatted.push_str(ctx.line_ending);
+            }
+            continue;
+        }
+
         let last_has_no_separator = x >= seps.len();
         let mut has_trailing_comment = false;
 
@@ -382,6 +403,9 @@ pub(super) fn separated_list_with_closing(
             docs.push(print_token(ctx, seps[x]));
             docs.push(after_separator.clone());
         }
+    }
+    if !unformatted.is_empty() {
+        docs.push(Doc::text(unformatted.trim().to_string()));
     }
     Doc::concat(docs)
 }
@@ -642,29 +666,46 @@ pub(super) fn using_directive(ctx: &mut Ctx, node: Node, print_extra_lines: bool
     Doc::concat(docs)
 }
 
-pub(super) fn using_group(ctx: &Ctx, node: Node) -> usize {
+/// the target of a using directive if it is a name (Roslyn's UsingDirective.Name)
+fn using_name<'t>(node: Node<'t>) -> Option<Node<'t>> {
+    let target = children(node).into_iter().rev().find(|c| c.is_named())?;
+    matches!(
+        target.kind(),
+        "identifier" | "qualified_name" | "alias_qualified_name" | "generic_name"
+    )
+    .then_some(target)
+}
+
+fn using_alias<'t>(node: Node<'t>) -> Option<Node<'t>> {
     let kids = children(node);
-    let has = |k: &str| kids.iter().any(|c| c.kind() == k && !c.is_named());
-    let has_alias = kids.iter().any(|c| c.kind() == "=");
-    let target = kids.iter().rev().find(|c| c.is_named());
-    let is_system = target.map(|t| is_system_name(ctx, *t)).unwrap_or(false);
-    if has("global") {
-        if has_alias {
+    let eq = kids.iter().position(|c| c.kind() == "=")?;
+    Some(kids[eq - 1])
+}
+
+fn using_has(node: Node, kind: &str) -> bool {
+    children(node).iter().any(|c| c.kind() == kind && !c.is_named())
+}
+
+fn using_group(ctx: &Ctx, node: Node) -> usize {
+    let name = using_name(node);
+    let is_system = name.map(|t| is_system_name(ctx, t)).unwrap_or(false);
+    if using_has(node, "global") {
+        if using_alias(node).is_some() {
             2
         } else if is_system {
             0
         } else {
             1
         }
-    } else if has("static") {
+    } else if using_has(node, "static") {
         if is_system {
             6
         } else {
             7
         }
-    } else if has_alias {
+    } else if using_alias(node).is_some() {
         8
-    } else if target.map(|t| t.kind() == "alias_qualified_name").unwrap_or(false) {
+    } else if name.map(|t| t.kind() == "alias_qualified_name").unwrap_or(false) {
         4
     } else if is_system {
         3
@@ -673,65 +714,163 @@ pub(super) fn using_group(ctx: &Ctx, node: Node) -> usize {
     }
 }
 
-pub(super) fn is_system_name(ctx: &Ctx, mut node: Node) -> bool {
+fn is_system_name(ctx: &Ctx, mut node: Node) -> bool {
     while node.kind() == "qualified_name" {
         node = field(node, "qualifier").unwrap();
     }
     node.kind() == "identifier" && ctx.text(node) == "System"
 }
 
-pub(super) fn using_sort_key(ctx: &Ctx, node: Node) -> String {
-    let kids = children(node);
-    let alias = kids.iter().position(|c| c.kind() == "=");
-    let text = match alias {
-        Some(i) => ctx.text(kids[i - 1]),
-        None => ctx.text(*kids.iter().rev().find(|c| c.is_named()).unwrap()),
-    };
-    // InvariantCultureIgnoreCase, approximated
-    text.trim().to_lowercase()
+/// DefaultOrder.Compare, with InvariantCultureIgnoreCase approximated by lowercase ordinal
+fn compare_usings(ctx: &Ctx, x: Node, y: Node) -> std::cmp::Ordering {
+    use std::cmp::Ordering;
+    let (xn, yn) = (using_name(x), using_name(y));
+    match (xn, yn) {
+        (None, Some(_)) => return Ordering::Less,
+        (Some(_), None) => return Ordering::Greater,
+        _ => {}
+    }
+    if let (Some(xa), Some(ya)) = (using_alias(x), using_alias(y)) {
+        return ctx.text(xa).trim().to_lowercase().cmp(&ctx.text(ya).trim().to_lowercase());
+    }
+    let key = |n: Option<Node>| n.map(|n| ctx.text(n).trim().to_lowercase());
+    key(xn).cmp(&key(yn))
+}
+
+struct UsingData<'t> {
+    using: Option<Node<'t>>,
+    leading: Doc,
+    should_format: bool,
 }
 
 pub(super) fn print_usings_with_sorting(ctx: &mut Ctx, usings: &[Node], print_extra_lines: bool) -> Doc {
+    use crate::trivia::{DirectiveKind as DK, TriviaKind as TK};
     let mut docs = Vec::new();
-    // the leading trivia of the first using is printed as is, everything after an #if is moved
-    // along with that using
-    let first_trivia = ctx.leading_trivia(usings[0]).to_vec();
-    docs.push(print_leading_trivia_list(ctx, &first_trivia));
+    let mut using_list: Vec<Node> = usings.to_vec();
 
-    let mut groups: Vec<Vec<(Node, Doc)>> = (0..9).map(|_| Vec::new()).collect();
-    let mut is_first = true;
-    for &u in usings {
-        let trivia = if is_first {
-            first_trivia_placeholder()
+    let first_leading = ctx.leading_trivia(usings[0]).to_vec();
+    let mut initial_comments: Vec<crate::trivia::Trivia> = Vec::new();
+    let mut trivia_within_if: Vec<crate::trivia::Trivia> = Vec::new();
+    let mut found_if = false;
+    let mut keep_usings_until_end_if = false;
+    for t in &first_leading {
+        if t.kind == TK::DisabledText && t.text.trim_start().starts_with("extern alias") {
+            initial_comments = first_leading.clone();
+            trivia_within_if.clear();
+            keep_usings_until_end_if = true;
+            break;
+        }
+        if matches!(t.kind, TK::Directive(DK::Define) | TK::Directive(DK::Undef)) {
+            initial_comments = first_leading.clone();
+            trivia_within_if.clear();
+            break;
+        }
+        if t.kind == TK::Directive(DK::If) {
+            found_if = true;
+        }
+        if found_if {
+            trivia_within_if.push(t.clone());
         } else {
-            let t = ctx.leading_trivia(u).to_vec();
-            print_leading_trivia_list(ctx, &t)
+            initial_comments.push(t.clone());
+        }
+    }
+    if ignore::node_matches(ctx, usings[0], ignore::IgnoreKind::Start) {
+        initial_comments.clear();
+    }
+
+    docs.push(print_leading_trivia_list(ctx, &initial_comments));
+    if keep_usings_until_end_if {
+        while !using_list.is_empty() {
+            let first_using = using_list.remove(0);
+            if first_using.id() != usings[0].id() {
+                let t = ctx.leading_trivia(first_using).to_vec();
+                docs.push(print_leading_trivia_list(ctx, &t));
+            }
+            docs.push(using_directive(ctx, first_using, true));
+            if ctx
+                .leading_trivia(first_using)
+                .iter()
+                .any(|t| t.kind == TK::Directive(DK::EndIf))
+            {
+                break;
+            }
+        }
+    }
+
+    // GroupUsings
+    let mut groups: Vec<Vec<UsingData>> = (0..9).map(|_| Vec::new()).collect();
+    let mut directive_group: Vec<UsingData> = Vec::new();
+    let mut if_count = 0i32;
+    let mut is_first = true;
+    let mut should_format = true;
+    for &u in &using_list {
+        let mut open_if_or_ignore = if_count > 0;
+        if ignore::node_matches(ctx, u, ignore::IgnoreKind::End) {
+            open_if_or_ignore = true;
+            should_format = true;
+        } else if ignore::node_matches(ctx, u, ignore::IgnoreKind::Start) {
+            should_format = false;
+        }
+        for t in ctx.leading_trivia(u) {
+            match t.kind {
+                TK::Directive(DK::If) => if_count += 1,
+                TK::Directive(DK::EndIf) => if_count -= 1,
+                _ => {}
+            }
+        }
+
+        let mut print_leading = |ctx: &mut Ctx| -> Doc {
+            let trivia = if is_first { trivia_within_if.clone() } else { ctx.leading_trivia(u).to_vec() };
+            let d = print_leading_trivia_list(ctx, &trivia);
+            is_first = false;
+            d
         };
-        is_first = false;
-        groups[using_group(ctx, u)].push((u, trivia));
+
+        if if_count > 0 {
+            let leading = print_leading(ctx);
+            directive_group.push(UsingData { using: Some(u), leading, should_format });
+        } else {
+            if open_if_or_ignore {
+                let leading = print_leading(ctx);
+                directive_group.push(UsingData { using: None, leading, should_format });
+            }
+            let leading = if !open_if_or_ignore { print_leading(ctx) } else { Doc::Null };
+            let data = UsingData { using: Some(u), leading, should_format };
+            if !should_format {
+                directive_group.push(data);
+            } else {
+                let g = using_group(ctx, u);
+                groups[g].push(data);
+            }
+        }
     }
     for g in groups.iter_mut() {
-        g.sort_by_key(|(n, _)| using_sort_key(ctx, *n));
+        g.sort_by(|a, b| compare_usings(ctx, a.using.unwrap(), b.using.unwrap()));
     }
+    groups.push(directive_group);
 
-    let mut first = true;
+    let mut is_first = true;
+    let mut prev_should_format = true;
     for g in groups {
-        for (u, trivia) in g {
-            if !first {
+        for data in g {
+            if !is_first && (data.should_format || prev_should_format) {
                 docs.push(Doc::hard_line());
             }
-            first = false;
-            if !matches!(trivia, Doc::Null) {
-                docs.push(trivia);
+            prev_should_format = data.should_format;
+            if !matches!(data.leading, Doc::Null) && data.should_format {
+                docs.push(data.leading);
             }
-            docs.push(using_directive(ctx, u, print_extra_lines));
+            if let Some(u) = data.using {
+                docs.push(if data.should_format {
+                    using_directive(ctx, u, print_extra_lines)
+                } else {
+                    Doc::text(ignore::print_node_without_formatting(ctx, u))
+                });
+            }
+            is_first = false;
         }
     }
     Doc::concat(docs)
-}
-
-pub(super) fn first_trivia_placeholder() -> Doc {
-    Doc::Null
 }
 
 // ---- modifiers, attributes ------------------------------------------------------------------

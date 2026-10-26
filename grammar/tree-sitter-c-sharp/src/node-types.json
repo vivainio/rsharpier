@@ -1779,7 +1779,59 @@
         "required": true,
         "types": [
           {
-            "type": "expression",
+            "type": "array_creation_expression",
+            "named": true
+          },
+          {
+            "type": "base",
+            "named": false
+          },
+          {
+            "type": "checked_expression",
+            "named": true
+          },
+          {
+            "type": "conditional_access_expression",
+            "named": true
+          },
+          {
+            "type": "default_expression",
+            "named": true
+          },
+          {
+            "type": "implicit_object_creation_expression",
+            "named": true
+          },
+          {
+            "type": "interpolated_string_expression",
+            "named": true
+          },
+          {
+            "type": "invocation_expression",
+            "named": true
+          },
+          {
+            "type": "literal",
+            "named": true
+          },
+          {
+            "type": "lvalue_expression",
+            "named": true
+          },
+          {
+            "type": "object_creation_expression",
+            "named": true
+          },
+          {
+            "type": "postfix_unary_expression",
+            "named": true
+          },
+          {
+            "type": "sizeof_expression",
+            "named": true
+          },
+          {
+            "type": "typeof_expression",
             "named": true
           }
         ]

@@ -44,6 +44,12 @@ export default grammar({
   name: 'c_sharp',
 
   conflicts: $ => [
+    [$.constant_pattern, $.non_lvalue_expression, $._access_target],
+    [$.constant_pattern, $._expression_statement_expression, $._access_target],
+    [$.non_lvalue_expression, $._expression_statement_expression, $._access_target],
+    [$._expression_statement_expression, $._access_target],
+    [$.expression, $._access_target],
+    [$.non_lvalue_expression, $._access_target],
     [$._simple_name, $.generic_name],
     [$._simple_name, $.type_parameter],
     [$._simple_name, $.subpattern],
@@ -72,8 +78,8 @@ export default grammar({
     [$._array_base_type, $.stackalloc_expression],
 
     [$.constant_pattern, $.non_lvalue_expression],
-    [$._pattern_binary_expression, $.binary_expression],
     [$.non_lvalue_expression, $._expression_statement_expression],
+    [$._pattern_binary_expression, $.binary_expression],
     [$.constant_pattern, $._expression_statement_expression],
     [$.constant_pattern, $.lvalue_expression],
     [$.constant_pattern, $._name],
@@ -1172,8 +1178,6 @@ export default grammar({
       $._variable_designation,
     ),
 
-    // patched: only operators that bind tighter than the relational operators belong to a
-    // constant pattern, so `x is null || y` is `(x is null) || y`
     constant_pattern: $ => choice(
       alias($._pattern_binary_expression, $.binary_expression),
       $.default_expression,
@@ -1568,8 +1572,26 @@ export default grammar({
       field('alternative', $.expression),
     )),
 
-    conditional_access_expression: $ => prec.right(PREC.CONDITIONAL, seq(
-      field('condition', $.expression),
+    _access_target: $ => choice(
+      'base',
+      $.interpolated_string_expression,
+      $.conditional_access_expression,
+      $.literal,
+      $.invocation_expression,
+      $.postfix_unary_expression,
+      $.parenthesized_expression,
+      $.object_creation_expression,
+      $.checked_expression,
+      $.default_expression,
+      $.sizeof_expression,
+      $.typeof_expression,
+      $.array_creation_expression,
+      $.implicit_object_creation_expression,
+      $.lvalue_expression,
+    ),
+
+    conditional_access_expression: $ => prec.left(PREC.POSTFIX, seq(
+      field('condition', $._access_target),
       '?',
       choice(
         $.member_binding_expression,

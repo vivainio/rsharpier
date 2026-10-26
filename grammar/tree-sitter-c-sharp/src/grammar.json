@@ -8307,9 +8307,74 @@
         ]
       }
     },
+    "_access_target": {
+      "type": "CHOICE",
+      "members": [
+        {
+          "type": "STRING",
+          "value": "base"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "interpolated_string_expression"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "conditional_access_expression"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "literal"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "invocation_expression"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "postfix_unary_expression"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "parenthesized_expression"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "object_creation_expression"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "checked_expression"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "default_expression"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "sizeof_expression"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "typeof_expression"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "array_creation_expression"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "implicit_object_creation_expression"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "lvalue_expression"
+        }
+      ]
+    },
     "conditional_access_expression": {
-      "type": "PREC_RIGHT",
-      "value": 2,
+      "type": "PREC_LEFT",
+      "value": 18,
       "content": {
         "type": "SEQ",
         "members": [
@@ -8318,7 +8383,7 @@
             "name": "condition",
             "content": {
               "type": "SYMBOL",
-              "name": "expression"
+              "name": "_access_target"
             }
           },
           {
@@ -12355,6 +12420,33 @@
   ],
   "conflicts": [
     [
+      "constant_pattern",
+      "non_lvalue_expression",
+      "_access_target"
+    ],
+    [
+      "constant_pattern",
+      "_expression_statement_expression",
+      "_access_target"
+    ],
+    [
+      "non_lvalue_expression",
+      "_expression_statement_expression",
+      "_access_target"
+    ],
+    [
+      "_expression_statement_expression",
+      "_access_target"
+    ],
+    [
+      "expression",
+      "_access_target"
+    ],
+    [
+      "non_lvalue_expression",
+      "_access_target"
+    ],
+    [
       "_simple_name",
       "generic_name"
     ],
@@ -12441,12 +12533,12 @@
       "non_lvalue_expression"
     ],
     [
-      "_pattern_binary_expression",
-      "binary_expression"
-    ],
-    [
       "non_lvalue_expression",
       "_expression_statement_expression"
+    ],
+    [
+      "_pattern_binary_expression",
+      "binary_expression"
     ],
     [
       "constant_pattern",

@@ -1714,6 +1714,13 @@ fn has_invocation_excluding_leftmost_parenthesized(expr: Node) -> bool {
 fn is_terminal_invocation(expr: Node) -> bool {
     match expr.kind() {
         "invocation_expression" => {
+            // tree-sitter nests `a?.b()` as an invocation of a conditional access, Roslyn nests it
+            // the other way around
+            if let Some(x) = condition_before_first_question(field(expr, "function").unwrap()) {
+                return !any_descendant(expr, Some(x.id()), &|n| {
+                    n.kind() == "invocation_expression" && n.id() != expr.id()
+                }) && !has_invocation_excluding_leftmost_parenthesized(x);
+            }
             !has_invocation_excluding_leftmost_parenthesized(field(expr, "function").unwrap())
         }
         "conditional_access_expression" => {
@@ -1728,6 +1735,20 @@ fn is_terminal_invocation(expr: Node) -> bool {
         }
         "await_expression" => is_terminal_invocation(children(expr)[1]),
         _ => false,
+    }
+}
+
+/// the expression in front of the first `?` of a conditional access chain
+fn condition_before_first_question(expr: Node) -> Option<Node> {
+    match expr.kind() {
+        "conditional_access_expression" => {
+            let c = children(expr)[0];
+            condition_before_first_question(c).or(Some(c))
+        }
+        "member_access_expression" => condition_before_first_question(field(expr, "expression")?),
+        "invocation_expression" => condition_before_first_question(field(expr, "function")?),
+        "element_access_expression" => condition_before_first_question(field(expr, "expression")?),
+        _ => None,
     }
 }
 
@@ -1796,12 +1817,20 @@ fn determine_layout(ctx: &Ctx, left_node: Node, right: Node) -> Layout {
         return Layout::BreakAfterOperator;
     }
     let is_tail = right.kind() != "assignment_expression";
-    let parent_kind = left_node.parent().map(|p| p.kind()).unwrap_or("");
+    let mut parent_kind = left_node.parent().map(|p| p.kind()).unwrap_or("");
+    let mut grand_kind = left_node.parent().and_then(|p| p.parent()).map(|p| p.kind()).unwrap_or("");
+    if parent_kind == "variable_declarator" {
+        // Roslyn has an EqualsValueClause between the declarator and the value
+        parent_kind = "equals_value_clause";
+        grand_kind = "variable_declarator";
+    } else if grand_kind == "variable_declarator" {
+        grand_kind = "equals_value_clause";
+    }
     let should_use_chain = left_node.kind() == "assignment_expression"
         && matches!(parent_kind, "assignment_expression" | "equals_value_clause")
         && (!is_tail
             || !matches!(
-                left_node.parent().and_then(|p| p.parent()).map(|p| p.kind()).unwrap_or(""),
+                grand_kind,
                 "expression_statement" | "variable_declarator" | "arrow_expression_clause"
             ));
     if should_use_chain {

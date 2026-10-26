@@ -8,6 +8,9 @@ use crate::trivia::{DirectiveKind, TriviaKind, TriviaListExt};
 use crate::{concat, group, indent};
 
 pub fn print(ctx: &mut Ctx, node: Node) -> Doc {
+    if !node.is_named() {
+        return print_token(ctx, node);
+    }
     match node.kind() {
         "compilation_unit" => compilation_unit(ctx, node),
         "global_statement" => print(ctx, named_children(node)[0]),
@@ -45,6 +48,8 @@ pub fn print(ctx: &mut Ctx, node: Node) -> Doc {
         "initializer_expression" => exprs::initializer_expression(ctx, node),
         "tuple_expression" => exprs::tuple_expression(ctx, node),
         "collection_expression" => exprs::collection_expression(ctx, node),
+        "is_pattern_expression" if is_binary_like(ctx, node) => binary_expression(ctx, node),
+        "as_expression" => binary_expression(ctx, node),
         "is_pattern_expression" => patterns::is_pattern_expression(ctx, node),
         "declaration_pattern" => patterns::declaration_pattern(ctx, node),
         "negated_pattern" => patterns::negated_pattern(ctx, node),
@@ -139,7 +144,102 @@ pub fn print(ctx: &mut Ctx, node: Node) -> Doc {
         "identifier" | "predefined_type" | "implicit_type" | "integer_literal" | "real_literal"
         | "string_literal" | "verbatim_string_literal" | "raw_string_literal"
         | "character_literal" | "boolean_literal" | "null_literal" | "this_expression"
-        | "interpolated_string_expression" | "modifier" => print_token(ctx, node),
+        | "interpolated_string_expression" | "modifier" | "discard" => print_token(ctx, node),
+        "throw_expression" => {
+            let kids = children(node);
+            concat![print_token_with_suffix(ctx, kids[0], " "), print(ctx, kids[1])]
+        }
+        "collection_element" | "expression_element" | "type_pattern" => print(ctx, children(node)[0]),
+        "spread_element" => {
+            let kids = children(node);
+            group!(print_token(ctx, kids[0]), " ", print(ctx, kids[1]))
+        }
+        "parenthesized_pattern" => {
+            let kids = children(node);
+            group!(
+                print_token(ctx, kids[0]),
+                indent!(Doc::soft_line(), print(ctx, kids[1])),
+                Doc::soft_line(),
+                print_token(ctx, kids[2])
+            )
+        }
+        "scoped_type" => {
+            let kids = children(node);
+            concat![print_token_with_suffix(ctx, kids[0], " "), print(ctx, kids[1])]
+        }
+        "with_expression" => with_expression(ctx, node),
+        "anonymous_method_expression" => {
+            let mut docs = Vec::new();
+            let mods = modifiers(node);
+            if !mods.is_empty() {
+                let printed: Vec<Doc> = mods.iter().map(|m| print_token(ctx, *m)).collect();
+                docs.push(group!(Doc::join(Doc::text(" "), printed), " "));
+            }
+            docs.push(print_token(ctx, kw(node, "delegate").unwrap()));
+            if let Some(pl) = field(node, "parameters") {
+                docs.push(parameter_list(ctx, pl));
+            }
+            docs.push(block(ctx, *children(node).last().unwrap()));
+            Doc::concat(docs)
+        }
+        "unsafe_statement" => {
+            let kids = children(node);
+            concat![extra_new_lines(ctx, node), print_token(ctx, kids[0]), print(ctx, kids[1])]
+        }
+        "goto_statement" => {
+            let kids = children(node);
+            let mut docs = vec![extra_new_lines(ctx, node), print_token(ctx, kids[0])];
+            for c in &kids[1..kids.len() - 1] {
+                docs.push(Doc::text(" "));
+                docs.push(print_child(ctx, *c));
+            }
+            docs.push(print_token(ctx, *kids.last().unwrap()));
+            Doc::concat(docs)
+        }
+        "labeled_statement" => {
+            let kids = children(node);
+            let stmt = *kids.last().unwrap();
+            concat![
+                extra_new_lines(ctx, node),
+                print_token(ctx, kids[0]),
+                print_token(ctx, kids[1]),
+                if stmt.kind() == "block" {
+                    block(ctx, stmt)
+                } else {
+                    concat![Doc::hard_line(), print(ctx, stmt)]
+                }
+            ]
+        }
+        "stackalloc_expression" => group!(
+            print_token_with_suffix(ctx, kw(node, "stackalloc").unwrap(), " "),
+            print(ctx, field(node, "type").unwrap()),
+            exprs::optional_initializer_with_line_pub(ctx, node)
+        ),
+        "implicit_stackalloc_expression" => {
+            let kids = children(node);
+            concat![
+                print_token(ctx, kids[0]),
+                print_token(ctx, kids[1]),
+                print_token_with_suffix(ctx, kids[2], " "),
+                print(ctx, kids[3])
+            ]
+        }
+        "implicit_array_creation_expression" => {
+            let kids = children(node);
+            let open = kids[1];
+            let close = kids.iter().find(|c| c.kind() == "]").copied().unwrap();
+            let commas: Vec<Doc> = kids.iter().filter(|c| c.kind() == ",").map(|c| print_token(ctx, *c)).collect();
+            let init = *kids.last().unwrap();
+            group!(
+                print_token(ctx, kids[0]),
+                print_token(ctx, open),
+                Doc::concat(commas),
+                print_token(ctx, close),
+                Doc::line(),
+                exprs::initializer_expression(ctx, init)
+            )
+        }
+        "local_function_statement" => method_declaration(ctx, node),
         _ => unhandled(ctx, node),
     }
 }
@@ -1394,6 +1494,39 @@ pub(super) fn assignment_expression(ctx: &mut Ctx, node: Node) -> Doc {
     right_hand_side(ctx, node, left_doc, op_doc, right)
 }
 
+/// (left, operator, right) of anything Roslyn models as a BinaryExpression
+pub(super) fn binary_parts<'t>(ctx: &Ctx, node: Node<'t>) -> Option<(Node<'t>, Node<'t>, Node<'t>)> {
+    match node.kind() {
+        "binary_expression" | "as_expression" => Some((
+            field(node, "left")?,
+            field(node, "operator")?,
+            field(node, "right")?,
+        )),
+        "is_pattern_expression" => {
+            let pattern = field(node, "pattern")?;
+            if pattern.kind() != "constant_pattern" {
+                return None;
+            }
+            let inner = children(pattern)[0];
+            let _ = ctx;
+            if matches!(
+                inner.kind(),
+                "identifier" | "qualified_name" | "generic_name" | "predefined_type"
+                    | "nullable_type" | "array_type" | "alias_qualified_name"
+            ) {
+                Some((field(node, "expression")?, kw(node, "is")?, inner))
+            } else {
+                None
+            }
+        }
+        _ => None,
+    }
+}
+
+pub(super) fn is_binary_like(ctx: &Ctx, node: Node) -> bool {
+    binary_parts(ctx, node).is_some()
+}
+
 pub(super) fn binary_expression(ctx: &mut Ctx, node: Node) -> Doc {
     let docs = print_binary(ctx, node);
     let parent_kind = node.parent().map(|p| p.kind()).unwrap_or("");
@@ -1407,14 +1540,15 @@ pub(super) fn binary_expression(ctx: &mut Ctx, node: Node) -> Doc {
             | "catch_filter_clause"
             | "checked_expression"
             | "do_statement"
+            | "equals_value_clause"
+            | "variable_declarator"
             | "parenthesized_expression"
-            | "lambda_expression"
             | "return_statement"
             | "switch_expression"
             | "switch_statement"
             | "where_clause"
             | "while_statement"
-    ) || (parent_kind == "variable_declarator")
+    ) || (parent_kind == "lambda_expression")
         || (parent_kind == "conditional_expression"
             && field(node.parent().unwrap(), "consequence").map(|n| n.id()) != Some(node.id())
             && field(node.parent().unwrap(), "alternative").map(|n| n.id()) != Some(node.id()));
@@ -1427,74 +1561,50 @@ pub(super) fn binary_expression(ctx: &mut Ctx, node: Node) -> Doc {
     }
 }
 
-pub(super) fn precedence(op: &str) -> u8 {
+fn precedence_of_op(op: &str) -> i32 {
     match op {
-        "*" | "/" | "%" => 12,
-        "+" | "-" => 11,
+        "??" => 1,
+        "||" => 2,
+        "&&" => 3,
+        "|" => 4,
+        "^" => 5,
+        "&" => 6,
+        "!=" => 7,
+        "==" => 8,
+        "<" | "<=" | ">" | ">=" | "is" | "as" => 9,
         "<<" | ">>" | ">>>" => 10,
-        "<" | ">" | "<=" | ">=" | "is" | "as" => 9,
-        "==" | "!=" => 8,
-        "&" => 7,
-        "^" => 6,
-        "|" => 5,
-        "&&" => 4,
-        "||" => 3,
-        "??" => 2,
-        _ => 0,
+        "-" | "+" => 11,
+        "*" | "/" | "%" => 12,
+        _ => -1,
     }
 }
 
-pub(super) fn should_flatten(parent_op: &str, node_op: &str) -> bool {
-    if precedence(parent_op) != precedence(node_op) {
-        return false;
+fn precedence(ctx: &Ctx, node: Node) -> i32 {
+    match binary_parts(ctx, node) {
+        Some((_, op, _)) => precedence_of_op(ctx.text(op)),
+        None => -1,
     }
-    if parent_op == "**" {
-        return false;
-    }
-    if matches!(parent_op, "==" | "!=") && matches!(node_op, "==" | "!=") {
-        return false;
-    }
-    if (node_op == "%" && matches!(parent_op, "*" | "/"))
-        || (parent_op == "%" && matches!(node_op, "*" | "/"))
-    {
-        return false;
-    }
-    if node_op != parent_op && matches!(node_op, "*" | "/") && matches!(parent_op, "*" | "/") {
-        return false;
-    }
-    if matches!(parent_op, "<<" | ">>" | ">>>") && matches!(node_op, "<<" | ">>" | ">>>") {
-        return false;
-    }
-    true
 }
 
-pub(super) fn print_binary(ctx: &mut Ctx, node: Node) -> Vec<Doc> {
-    if node.kind() != "binary_expression" {
+fn print_binary(ctx: &mut Ctx, node: Node) -> Vec<Doc> {
+    let Some((left, op, right)) = binary_parts(ctx, node) else {
         return vec![Doc::group_of(print(ctx, node))];
-    }
-    let left = field(node, "left").unwrap();
-    let op = field(node, "operator").unwrap();
-    let right = field(node, "right").unwrap();
+    };
     let op_text = ctx.text(op).to_string();
     let parent = node.parent().unwrap();
 
-    let parent_op = if parent.kind() == "binary_expression" {
-        Some(ctx.text(field(parent, "operator").unwrap()).to_string())
-    } else {
-        None
-    };
-    let is_coalesce = op_text == "??";
-    let mut should_group = (!is_coalesce || should_group_null_coalescing(ctx, node))
-        && parent.kind() != node.kind()
-        || (parent.kind() == node.kind() && parent_op.as_deref() != Some(op_text.as_str()) && false);
-    should_group = should_group
-        && parent_op.as_deref().map(precedence).unwrap_or(255) != precedence(&op_text)
-        && left.kind() != node.kind()
-        && right.kind() != node.kind()
+    // This group ensures that something like == 0 does not end up on its own line
+    let parent_op_text = binary_parts(ctx, parent).map(|(_, o, _)| ctx.text(o).to_string());
+    let should_group = (op_text != "??" || should_group_null_coalescing(ctx, node))
+        && parent_op_text.as_deref() != Some(op_text.as_str())
+        && precedence(ctx, node) != precedence(ctx, parent)
+        && !is_binary_like(ctx, left)
+        && !is_binary_like(ctx, right)
         && left.kind() != "is_pattern_expression";
 
+    // nested ?? have the next level on the right side, everything else has it on the left
+    let binary_on_the_right = op_text == "??";
     let mut docs = Vec::new();
-    let binary_on_the_right = is_coalesce;
     if binary_on_the_right {
         docs.push(print(ctx, left));
         docs.push(Doc::line());
@@ -1502,8 +1612,10 @@ pub(super) fn print_binary(ctx: &mut Ctx, node: Node) -> Vec<Doc> {
         docs.push(Doc::text(" "));
     }
     let possible = if binary_on_the_right { right } else { left };
-    let flatten = possible.kind() == "binary_expression"
-        && should_flatten(&op_text, ctx.text(field(possible, "operator").unwrap()));
+    // Put all operators with the same precedence level in the same group
+    let flatten = binary_parts(ctx, possible)
+        .map(|(_, child_op, _)| precedence_of_op(&op_text) == precedence_of_op(ctx.text(child_op)))
+        .unwrap_or(false);
     if flatten {
         docs.extend(print_binary(ctx, possible));
     } else {
@@ -1521,18 +1633,76 @@ pub(super) fn print_binary(ctx: &mut Ctx, node: Node) -> Vec<Doc> {
     }
 
     let right_doc = concat![Doc::line(), print_token(ctx, op), " ", print(ctx, right)];
-    docs.push(if should_group {
-        Doc::group_of(right_doc)
-    } else {
-        right_doc
-    });
+    docs.push(if should_group { Doc::group_of(right_doc) } else { right_doc });
     docs
 }
 
-pub(super) fn should_group_null_coalescing(_ctx: &Ctx, node: Node) -> bool {
-    // TODO: port ShouldGroupNullCoalescingSyntax
-    let _ = node;
-    true
+fn any_descendant(node: Node, skip: Option<usize>, pred: &dyn Fn(Node) -> bool) -> bool {
+    if Some(node.id()) == skip {
+        return false;
+    }
+    if pred(node) {
+        return true;
+    }
+    children(node).into_iter().any(|c| any_descendant(c, skip, pred))
+}
+
+fn leftmost(node: Node) -> Node {
+    match node.kind() {
+        "member_access_expression" => leftmost(field(node, "expression").unwrap()),
+        "invocation_expression" => leftmost(field(node, "function").unwrap()),
+        "conditional_access_expression" => leftmost(children(node)[0]),
+        "await_expression" => leftmost(children(node)[1]),
+        _ => node,
+    }
+}
+
+fn has_invocation_excluding_leftmost_parenthesized(expr: Node) -> bool {
+    let l = leftmost(expr);
+    let excluded = if l.kind() == "parenthesized_expression" { Some(l.id()) } else { None };
+    any_descendant(expr, excluded, &|n| {
+        matches!(n.kind(), "invocation_expression" | "conditional_access_expression")
+    })
+}
+
+fn is_terminal_invocation(expr: Node) -> bool {
+    match expr.kind() {
+        "invocation_expression" => {
+            !has_invocation_excluding_leftmost_parenthesized(field(expr, "function").unwrap())
+        }
+        "conditional_access_expression" => {
+            let kids = children(expr);
+            let when_not_null = *kids.last().unwrap();
+            let rightmost = rightmost_expression(when_not_null);
+            rightmost.kind() == "invocation_expression"
+                && !any_descendant(when_not_null, None, &|n| {
+                    n.kind() == "invocation_expression" && n.id() != rightmost.id()
+                })
+                && !has_invocation_excluding_leftmost_parenthesized(kids[0])
+        }
+        "await_expression" => is_terminal_invocation(children(expr)[1]),
+        _ => false,
+    }
+}
+
+fn rightmost_expression(expr: Node) -> Node {
+    match expr.kind() {
+        "conditional_access_expression" => rightmost_expression(*children(expr).last().unwrap()),
+        "member_access_expression" => rightmost_expression(field(expr, "expression").unwrap()),
+        _ => expr,
+    }
+}
+
+fn should_group_null_coalescing(ctx: &Ctx, node: Node) -> bool {
+    let Some((left, op, _)) = binary_parts(ctx, node) else { return false };
+    if ctx.text(op) != "??" {
+        return false;
+    }
+    is_terminal_invocation(left)
+        || left.kind() == "parenthesized_expression"
+        || (left.kind() == "cast_expression"
+            && field(left, "value").map(|v| v.kind() == "parenthesized_expression").unwrap_or(false))
+        || left.kind() == "switch_expression"
 }
 
 // ---- right hand side ------------------------------------------------------------------------
@@ -1892,4 +2062,40 @@ fn fixed_statement(ctx: &mut Ctx, node: Node) -> Doc {
 
 pub(super) fn concat_children_pub(ctx: &mut Ctx, node: Node) -> Doc {
     concat_children(ctx, node)
+}
+
+fn with_expression(ctx: &mut Ctx, node: Node) -> Doc {
+    let kids = children(node);
+    let expr = kids[0];
+    let with_kw = kw(node, "with").unwrap();
+    let open = kw(node, "{").unwrap();
+    let close = *kids.last().unwrap();
+    let items: Vec<Node> = kids.iter().copied().filter(|c| c.kind() == "with_initializer").collect();
+    let seps: Vec<Node> = kids.iter().copied().filter(|c| c.kind() == ",").collect();
+    let inner = if items.is_empty() {
+        Doc::text(" ")
+    } else {
+        concat![
+            Doc::indent(vec![
+                Doc::line(),
+                separated_list_with_closing(ctx, &items, &seps, with_initializer, Doc::line(), 0, Some(close))
+            ]),
+            Doc::line()
+        ]
+    };
+    concat![
+        print(ctx, expr),
+        " ",
+        print_token_with_suffix(ctx, with_kw, Doc::line()),
+        print_token(ctx, open),
+        inner,
+        print_token(ctx, close)
+    ]
+}
+
+fn with_initializer(ctx: &mut Ctx, node: Node) -> Doc {
+    let kids = children(node);
+    let left = concat![print(ctx, kids[0]), " "];
+    let op = print_token(ctx, kids[1]);
+    right_hand_side(ctx, node, left, op, kids[2])
 }

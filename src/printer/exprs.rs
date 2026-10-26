@@ -700,3 +700,7 @@ pub fn array_rank_specifier(ctx: &mut Ctx, node: Node) -> Doc {
         print_token(ctx, *kids.last().unwrap())
     )
 }
+
+pub fn optional_initializer_with_line_pub(ctx: &mut Ctx, node: Node) -> Doc {
+    optional_initializer_with_line(ctx, node)
+}

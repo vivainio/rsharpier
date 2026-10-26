@@ -1,4 +1,5 @@
 pub mod doc;
+pub mod api;
 pub mod cli;
 pub mod format;
 pub mod options;

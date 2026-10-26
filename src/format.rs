@@ -14,6 +14,8 @@ pub struct FormatResult {
 #[derive(Debug)]
 pub enum FormatError {
     Syntax(String),
+    /// the syntax tree is nested too deeply to print
+    TooDeep,
     /// the formatted code does not contain the same tokens as the original, which means a printer
     /// dropped or invented code. Mirrors CSharpier's SyntaxNodeComparer check.
     Validation(String),
@@ -166,7 +168,15 @@ fn format_with_symbols_validated(
         unhandled: Vec::new(),
         line_ending: get_line_ending(src, options),
     };
-    let doc = printer::print_root(&mut ctx, root);
+    let printed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let doc = printer::print_root(&mut ctx, root);
+        (doc, std::mem::take(&mut ctx.unhandled))
+    }));
+    let (doc, unhandled) = match printed {
+        Ok(v) => v,
+        Err(payload) if payload.is::<printer::InTooDeep>() => return Err(FormatError::TooDeep),
+        Err(payload) => std::panic::resume_unwind(payload),
+    };
     if std::env::var_os("CSHARPIER_DUMP_DOC").is_some() {
         eprintln!("{}", doc.dump());
     }
@@ -176,7 +186,7 @@ fn format_with_symbols_validated(
     }
     Ok(FormatResult {
         code,
-        unhandled: ctx.unhandled,
+        unhandled,
     })
 }
 

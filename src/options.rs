@@ -91,6 +91,7 @@ pub fn format_contents(contents: &str, options: &FileOptions, include_generated:
             match r {
                 Ok(Ok(result)) => FormatOutcome::Formatted(result.code),
                 Ok(Err(crate::FormatError::Syntax(e))) => FormatOutcome::SyntaxError(e),
+                Ok(Err(crate::FormatError::TooDeep)) => FormatOutcome::Failure("We can't handle this deep of recursion yet.".into()),
                 Ok(Err(crate::FormatError::Validation(e))) => FormatOutcome::Failure(format!("Failed formatting validation.\n{e}")),
                 Err(_) => FormatOutcome::Failure("Threw exception while formatting.".into()),
             }

@@ -18,8 +18,12 @@ use crate::trivia::{Tokens, Trivia};
 
 pub use token::*;
 
+/// panic payload used to unwind when the syntax tree is nested too deeply to print safely
+pub struct InTooDeep;
+
 #[derive(Default)]
 pub struct State {
+    pub printing_depth: usize,
     pub next_trivia_needs_line: bool,
     pub reordered_modifiers: bool,
     pub moved_trailing_trivia: bool,

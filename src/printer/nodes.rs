@@ -8,6 +8,20 @@ use crate::trivia::{DirectiveKind, TriviaKind, TriviaListExt};
 use crate::{concat, group, indent};
 
 pub fn print(ctx: &mut Ctx, node: Node) -> Doc {
+    enter(ctx);
+    let doc = print_inner(ctx, node);
+    ctx.state.printing_depth -= 1;
+    doc
+}
+
+pub(super) fn enter(ctx: &mut Ctx) {
+    ctx.state.printing_depth += 1;
+    if ctx.state.printing_depth > 200 {
+        std::panic::resume_unwind(Box::new(InTooDeep));
+    }
+}
+
+fn print_inner(ctx: &mut Ctx, node: Node) -> Doc {
     if !node.is_named() {
         return print_token(ctx, node);
     }
@@ -1963,6 +1977,13 @@ fn print_binary(ctx: &mut Ctx, node: Node) -> Vec<Doc> {
     let Some((left, op, right)) = binary_parts(ctx, node) else {
         return vec![Doc::group_of(print(ctx, node))];
     };
+    enter(ctx);
+    let docs = print_binary_parts(ctx, node, left, op, right);
+    ctx.state.printing_depth -= 1;
+    docs
+}
+
+fn print_binary_parts<'t>(ctx: &mut Ctx, node: Node<'t>, left: Node<'t>, op: Node<'t>, right: Node<'t>) -> Vec<Doc> {
     let op_text = ctx.text(op).to_string();
     let parent = node.parent().unwrap();
 

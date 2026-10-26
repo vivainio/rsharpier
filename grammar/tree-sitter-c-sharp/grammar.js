@@ -1166,7 +1166,7 @@ export default grammar({
       $.relational_pattern,
       $.or_pattern,
       $.and_pattern,
-      $.list_pattern,
+      prec.dynamic(5, $.list_pattern),
       $.type_pattern,
     ),
 
@@ -1241,10 +1241,12 @@ export default grammar({
 
     type_pattern: $ => prec.right(field('type', $.type)),
 
+    slice_pattern: $ => prec.right(seq('..', optional($.pattern))),
+
     list_pattern: $ => prec.right(seq(
       '[',
       optional(seq(
-        commaSep1(choice($.pattern, '..')),
+        commaSep1(choice($.pattern, $.slice_pattern)),
         optional(','),
       )),
       ']',

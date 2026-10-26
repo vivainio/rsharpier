@@ -3724,6 +3724,10 @@
         {
           "type": "pattern",
           "named": true
+        },
+        {
+          "type": "slice_pattern",
+          "named": true
         }
       ]
     }
@@ -5595,6 +5599,21 @@
           }
         ]
       }
+    }
+  },
+  {
+    "type": "slice_pattern",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": false,
+      "types": [
+        {
+          "type": "pattern",
+          "named": true
+        }
+      ]
     }
   },
   {

@@ -76,6 +76,12 @@ rep("""    conditional_access_expression: $ => prec.right(PREC.CONDITIONAL, seq(
 rep("generic_name: $ => seq($.identifier, $.type_argument_list),",
     "generic_name: $ => prec.dynamic(20, seq($.identifier, $.type_argument_list)),")
 
+# list patterns: `[.., x]` and `[..]` are slice patterns
+rep("commaSep1(choice($.pattern, '..')),", "commaSep1(choice($.pattern, $.slice_pattern)),")
+rep("    list_pattern: $ => prec.right(seq(", "    slice_pattern: $ => prec.right(seq('..', optional($.pattern))),\n\n    list_pattern: $ => prec.right(seq(")
+
+rep("      $.and_pattern,\n      $.list_pattern,", "      $.and_pattern,\n      prec.dynamic(5, $.list_pattern),")
+
 open("tree-sitter-c-sharp/grammar.js", "w").write(s)
 
 for i in range(30):

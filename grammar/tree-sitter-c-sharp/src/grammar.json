@@ -5609,8 +5609,12 @@
           "name": "and_pattern"
         },
         {
-          "type": "SYMBOL",
-          "name": "list_pattern"
+          "type": "PREC_DYNAMIC",
+          "value": 5,
+          "content": {
+            "type": "SYMBOL",
+            "name": "list_pattern"
+          }
         },
         {
           "type": "SYMBOL",
@@ -6105,6 +6109,31 @@
         }
       }
     },
+    "slice_pattern": {
+      "type": "PREC_RIGHT",
+      "value": 0,
+      "content": {
+        "type": "SEQ",
+        "members": [
+          {
+            "type": "STRING",
+            "value": ".."
+          },
+          {
+            "type": "CHOICE",
+            "members": [
+              {
+                "type": "SYMBOL",
+                "name": "pattern"
+              },
+              {
+                "type": "BLANK"
+              }
+            ]
+          }
+        ]
+      }
+    },
     "list_pattern": {
       "type": "PREC_RIGHT",
       "value": 0,
@@ -6132,8 +6161,8 @@
                             "name": "pattern"
                           },
                           {
-                            "type": "STRING",
-                            "value": ".."
+                            "type": "SYMBOL",
+                            "name": "slice_pattern"
                           }
                         ]
                       },
@@ -6154,8 +6183,8 @@
                                   "name": "pattern"
                                 },
                                 {
-                                  "type": "STRING",
-                                  "value": ".."
+                                  "type": "SYMBOL",
+                                  "name": "slice_pattern"
                                 }
                               ]
                             }

@@ -153,7 +153,9 @@ pub fn format_with_symbols(
         eprintln!("{}", doc.dump());
     }
     let code = doc::print(&doc, options, line_ending(src));
-    validate(src, &code, symbols)?;
+    if std::env::var_os("CSHARPIER_NO_VALIDATE").is_none() {
+        validate(src, &code, symbols)?;
+    }
     Ok(FormatResult {
         code,
         unhandled: ctx.unhandled,

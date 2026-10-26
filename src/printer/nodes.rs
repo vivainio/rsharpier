@@ -193,7 +193,15 @@ pub fn print(ctx: &mut Ctx, node: Node) -> Doc {
         }
         "await_expression" => {
             let kids = children(node);
-            concat![print_token_with_suffix(ctx, kids[0], " "), print(ctx, kids[1])]
+            let precedes_query = kids[1].kind() == "query_expression";
+            concat![
+                print_token_with_suffix(ctx, kids[0], " "),
+                if precedes_query {
+                    Doc::indent(vec![Doc::line(), print(ctx, kids[1])])
+                } else {
+                    print(ctx, kids[1])
+                }
+            ]
         }
         "postfix_unary_expression" | "prefix_unary_expression" | "range_expression"
         | "element_access_expression" => concat_children(ctx, node),
@@ -1509,8 +1517,10 @@ pub(super) fn method_declaration(ctx: &mut Ctx, node: Node) -> Doc {
     if node.kind() == "destructor_declaration" {
         decl.push(print_token(ctx, kw(node, "~").unwrap()));
     }
-    if let Some(spec) = child_of_kind(node, "explicit_interface_specifier") {
-        decl.push(concat_children(ctx, spec));
+    if node.kind() != "operator_declaration" {
+        if let Some(spec) = child_of_kind(node, "explicit_interface_specifier") {
+            decl.push(concat_children(ctx, spec));
+        }
     }
     if let Some(name) = field(node, "name") {
         decl.push(print_token(ctx, name));

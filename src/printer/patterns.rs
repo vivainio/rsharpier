@@ -273,7 +273,7 @@ fn switch_section(ctx: &mut Ctx, node: Node) -> Doc {
     if statements.len() == 1 && statements[0].kind() == "block" {
         docs.push(block(ctx, statements[0]));
     } else if !statements.is_empty() {
-        let printed: Vec<Doc> = statements.iter().map(|s| print(ctx, *s)).collect();
+        let printed: Vec<Doc> = ignore::print_nodes_respecting_range_ignore(ctx, &statements);
         docs.push(Doc::indent(vec![
             if statements[0].kind() == "block" { Doc::Null } else { Doc::hard_line() },
             Doc::join(Doc::hard_line(), printed),

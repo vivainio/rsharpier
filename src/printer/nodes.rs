@@ -11,6 +11,9 @@ pub fn print(ctx: &mut Ctx, node: Node) -> Doc {
     if !node.is_named() {
         return print_token(ctx, node);
     }
+    if ignore::is_node_ignored(ctx, node) {
+        return ignore::print_ignored_node(ctx, node);
+    }
     match node.kind() {
         "compilation_unit" => compilation_unit(ctx, node),
         "global_statement" => print(ctx, named_children(node)[0]),
@@ -814,6 +817,11 @@ pub(super) fn print_attribute_lists(ctx: &mut Ctx, node: Node) -> Doc {
 }
 
 pub(super) fn attribute_list(ctx: &mut Ctx, node: Node) -> Doc {
+    if node.parent().map(|p| matches!(p.kind(), "method_declaration" | "constructor_declaration" | "destructor_declaration" | "operator_declaration" | "conversion_operator_declaration")).unwrap_or(false)
+        && ignore::node_matches(ctx, node, ignore::IgnoreKind::Ignore)
+    {
+        return Doc::text(ignore::print_node_without_formatting(ctx, node).trim().to_string());
+    }
     let kids = children(node);
     let open = kids[0];
     let close = *kids.last().unwrap();
@@ -1232,6 +1240,32 @@ pub(super) fn method_declaration(ctx: &mut Ctx, node: Node) -> Doc {
     }
     if !children_of_kind(node, "attribute_list").is_empty() {
         docs.push(print_attribute_lists(ctx, node));
+
+        // csharpier-ignore after the attributes prints the rest of the method as it is
+        let mods = modifiers(node);
+        let ret = field(node, "returns").or_else(|| field(node, "type"));
+        let anchor = if let Some(m) = mods.first() {
+            Some(*m)
+        } else {
+            ret
+        };
+        if let Some(a) = anchor {
+            if ignore::node_matches(ctx, a, ignore::IgnoreKind::Ignore) {
+                let attrs = children_of_kind(node, "attribute_list");
+                let full = ignore::full_text(ctx, node);
+                let first_tok = ctx.first_token_index(attrs[0]);
+                let attr_start = ctx.tokens.list[first_tok].start
+                    - ctx.tokens.list[first_tok].leading.iter().map(|t| t.text.len()).sum::<usize>();
+                let anchor_tok = ctx.first_token_index(a);
+                let anchor_start = ctx.tokens.list[anchor_tok].start
+                    - ctx.tokens.list[anchor_tok].leading.iter().map(|t| t.text.len()).sum::<usize>();
+                let _ = full;
+                let end = ignore::full_text(ctx, node).len() + attr_start;
+                let text = ctx.src[anchor_start..end].trim().to_string();
+                docs.push(Doc::text(ignore::without_formatting(&text, ctx.line_ending)));
+                return Doc::group(docs);
+            }
+        }
     }
     if !modifiers(node).is_empty() {
         decl.push(print_modifiers(ctx, node));
@@ -1369,7 +1403,7 @@ pub(super) fn block(ctx: &mut Ctx, node: Node) -> Doc {
 
     let mut inner = Doc::Null;
     if !statements.is_empty() {
-        let printed: Vec<Doc> = statements.iter().map(|s| print(ctx, *s)).collect();
+        let printed: Vec<Doc> = ignore::print_nodes_respecting_range_ignore(ctx, &statements);
         inner = Doc::indent(vec![
             statement_separator.clone(),
             Doc::join(statement_separator.clone(), printed),

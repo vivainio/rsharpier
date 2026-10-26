@@ -2,6 +2,7 @@
 
 mod chain;
 mod exprs;
+pub mod ignore;
 mod members;
 mod patterns;
 mod stmts;
@@ -31,6 +32,7 @@ pub struct Ctx<'a> {
     pub state: State,
     /// node kinds we have no printer for yet, they are printed verbatim
     pub unhandled: Vec<String>,
+    pub line_ending: &'a str,
 }
 
 impl<'a> Ctx<'a> {

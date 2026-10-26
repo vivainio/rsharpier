@@ -2,7 +2,7 @@
 
 use tree_sitter::Node;
 
-use super::{child_of_kind, extra_new_lines, modifiers, nodes, print_token, Ctx};
+use super::{child_of_kind, extra_new_lines, ignore, modifiers, nodes, print_token, Ctx};
 use crate::doc::Doc;
 use crate::trivia::{DirectiveKind, TriviaKind, TriviaListExt};
 
@@ -39,8 +39,29 @@ fn print_impl(
     }
 
     let mut last_member_forced_blank_line = false;
+    let mut unformatted_code = String::new();
+    let mut print_unformatted = false;
     for (member_index, &member) in members.iter().enumerate() {
+        let mut skip_adding_line_because_ignore_ended = false;
         let leading_trivia = ctx.leading_trivia(member);
+
+        if ignore::trivia_matches(leading_trivia, ignore::IgnoreKind::End) {
+            skip_adding_line_because_ignore_ended = true;
+            result.push(Doc::text(unformatted_code.trim().to_string()));
+            unformatted_code.clear();
+            print_unformatted = false;
+        } else if ignore::trivia_matches(leading_trivia, ignore::IgnoreKind::Start) {
+            if !print_unformatted && member_index > 0 {
+                result.push(Doc::hard_line());
+                result.push(extra_new_lines(ctx, member));
+            }
+            print_unformatted = true;
+        }
+
+        if print_unformatted {
+            unformatted_code.push_str(&ignore::print_node_without_formatting(ctx, member));
+            continue;
+        }
 
         let mut blank_line_is_forced = (member.kind() == "method_declaration"
             && parent_kind != "interface_declaration")
@@ -144,7 +165,7 @@ fn print_impl(
 
         if print_extra_new_lines {
             result.push(extra_new_lines(ctx, member));
-        } else if add_blank_line && !contains_end_if_or_region {
+        } else if add_blank_line && !contains_end_if_or_region && !skip_adding_line_because_ignore_ended {
             result.push(Doc::hard_line());
         }
 
@@ -172,6 +193,10 @@ fn print_impl(
         }
 
         last_member_forced_blank_line = blank_line_is_forced;
+    }
+
+    if !unformatted_code.is_empty() {
+        result.push(Doc::text(unformatted_code.trim().to_string()));
     }
 
     result

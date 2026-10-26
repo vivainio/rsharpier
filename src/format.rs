@@ -138,6 +138,7 @@ pub fn format_with_symbols(
         tokens: &tokens,
         state: State::default(),
         unhandled: Vec::new(),
+        line_ending: line_ending(src),
     };
     let doc = printer::print_root(&mut ctx, root);
     if std::env::var_os("CSHARPIER_DUMP_DOC").is_some() {

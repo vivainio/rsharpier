@@ -50,12 +50,28 @@ fn main() {
         } else {
             src.clone()
         };
+        let dir_name = dir.file_name().unwrap().to_string_lossy().to_string();
+        let is_xml = dir_name.starts_with("xml");
         let options = PrinterOptions {
             width: 100,
             use_tabs: name.ends_with("_Tabs"),
+            indent_size: if is_xml { 2 } else { 4 },
             ..Default::default()
         };
-        let result = std::panic::catch_unwind(|| csharpier_rs::format(&src, &options));
+        let sensitivity = if dir_name.ends_with("ignore") {
+            csharpier_rs::xml::XmlWhitespaceSensitivity::Ignore
+        } else {
+            csharpier_rs::xml::XmlWhitespaceSensitivity::Strict
+        };
+        let result = std::panic::catch_unwind(|| {
+            if is_xml {
+                csharpier_rs::xml::format_xml(&src, &options, sensitivity)
+                    .map(|code| csharpier_rs::FormatResult { code, unhandled: vec![] })
+                    .map_err(|e| csharpier_rs::FormatError::Syntax(e.0))
+            } else {
+                csharpier_rs::format(&src, &options)
+            }
+        });
         match result {
             Err(_) => {
                 fail += 1;

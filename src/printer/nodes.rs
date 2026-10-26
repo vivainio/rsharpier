@@ -1164,7 +1164,7 @@ pub(super) fn type_declaration(ctx: &mut Ctx, node: Node) -> Doc {
     let name = field(node, "name").unwrap();
     for k in children(node) {
         if !k.is_named() && k.start_byte() < name.start_byte()
-            && matches!(k.kind(), "record" | "class" | "struct" | "interface")
+            && matches!(k.kind(), "record" | "class" | "struct" | "interface" | "ref")
         {
             docs.push(print_token_with_suffix(ctx, k, " "));
         }

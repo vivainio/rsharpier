@@ -58,11 +58,13 @@ pub fn is_pattern_expression(ctx: &mut Ctx, node: Node) -> Doc {
 }
 
 pub fn declaration_pattern(ctx: &mut Ctx, node: Node) -> Doc {
-    concat![
-        print(ctx, field(node, "type").unwrap()),
-        " ",
-        print_child_pub(ctx, field(node, "name").unwrap())
-    ]
+    let kids = children(node);
+    let mut docs = vec![print(ctx, kids[0])];
+    for d in &kids[1..] {
+        docs.push(Doc::text(" "));
+        docs.push(print_child_pub(ctx, *d));
+    }
+    Doc::concat(docs)
 }
 
 pub fn negated_pattern(ctx: &mut Ctx, node: Node) -> Doc {

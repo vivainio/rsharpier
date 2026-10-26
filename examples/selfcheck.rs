@@ -37,7 +37,14 @@ fn main() {
         let src = src.trim_start_matches('\u{feff}').to_string();
         lines_total += src.lines().count();
         let options = PrinterOptions::default();
+        let t0 = std::time::Instant::now();
+        if std::env::var_os("VERBOSE").is_some() {
+            eprintln!("START {}", f.display());
+        }
         let r = std::panic::catch_unwind(|| csharpier_rs::format(&src, &options));
+        if t0.elapsed().as_millis() > 300 {
+            eprintln!("SLOW {:?} {} ({} bytes)", t0.elapsed(), f.display(), src.len());
+        }
         match r {
             Err(_) => {
                 panics += 1;
@@ -46,6 +53,22 @@ fn main() {
             Ok(Err(e)) => {
                 errors += 1;
                 report.push(format!("ERROR {} {:?}", f.display(), e).chars().take(300).collect());
+            }
+            Ok(Ok(res)) if std::env::var_os("IDEM").is_some() => {
+                // formatting the output again must not change it
+                match std::panic::catch_unwind(|| csharpier_rs::format(&res.code, &options)).unwrap_or_else(|_| Err(csharpier_rs::FormatError::Syntax("panic on second format".into()))) {
+                    Ok(again) if again.code == res.code => same += 1,
+                    Ok(again) => {
+                        diff += 1;
+                        std::fs::write(format!("target/selfcheck/{i}.expected"), &res.code).unwrap();
+                        std::fs::write(format!("target/selfcheck/{i}.actual"), &again.code).unwrap();
+                        report.push(format!("NOTIDEMPOTENT {i} {}", f.display()));
+                    }
+                    Err(e) => {
+                        errors += 1;
+                        report.push(format!("ERROR2 {} {:?}", f.display(), e).chars().take(300).collect());
+                    }
+                }
             }
             Ok(Ok(res)) => {
                 if res.code.replace("\r\n", "\n") == src.replace("\r\n", "\n") {

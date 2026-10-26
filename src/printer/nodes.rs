@@ -56,7 +56,8 @@ pub fn print(ctx: &mut Ctx, node: Node) -> Doc {
         "query_expression" => query::query_expression(ctx, node),
         "from_clause" | "select_clause" | "where_clause" | "let_clause" | "group_clause"
         | "order_by_clause" | "join_clause" => unhandled(ctx, node),
-        "record_declaration" | "record_struct_declaration" => type_declaration(ctx, node),
+        "record_declaration" | "record_struct_declaration" | "union_declaration" => type_declaration(ctx, node),
+        "extension_declaration" => extension_declaration(ctx, node),
         "operator_declaration" | "conversion_operator_declaration" => method_declaration(ctx, node),
         "indexer_declaration" | "event_declaration" => property_declaration(ctx, node),
         "bracketed_parameter_list" => parameter_list(ctx, node),
@@ -1164,7 +1165,7 @@ pub(super) fn type_declaration(ctx: &mut Ctx, node: Node) -> Doc {
     let name = field(node, "name").unwrap();
     for k in children(node) {
         if !k.is_named() && k.start_byte() < name.start_byte()
-            && matches!(k.kind(), "record" | "class" | "struct" | "interface" | "ref")
+            && matches!(k.kind(), "record" | "class" | "struct" | "interface" | "ref" | "union")
         {
             docs.push(print_token_with_suffix(ctx, k, " "));
         }
@@ -1642,9 +1643,10 @@ pub(super) fn parameter(ctx: &mut Ctx, node: Node) -> Doc {
         }
     }
     // modifiers like this, ref, out, in, params, scoped come before the type
+    let name_node = field(node, "name").filter(|n| n.end_byte() > n.start_byte());
     let ty_start = field(node, "type").map(|t| t.start_byte());
-    let name_start = field(node, "name").map(|t| t.start_byte());
-    let stop = ty_start.or(name_start).unwrap_or(usize::MAX);
+    let name_start = name_node.map(|t| t.start_byte());
+    let stop = ty_start.or(name_start).unwrap_or(0);
     let mods: Vec<Node> = children(node)
         .into_iter()
         .filter(|c| c.start_byte() < stop && c.kind() != "attribute_list")
@@ -1653,7 +1655,15 @@ pub(super) fn parameter(ctx: &mut Ctx, node: Node) -> Doc {
         let printed: Vec<Doc> = mods.iter().map(|m| print_token(ctx, *m)).collect();
         docs.push(group!(Doc::join(Doc::text(" "), printed), " "));
     }
-    let name = field(node, "name");
+    let name = name_node;
+    if field(node, "type").is_none() && name.is_none() {
+        // union members are only a type
+        for c in children(node) {
+            if c.kind() != "attribute_list" {
+                docs.push(print_child(ctx, c));
+            }
+        }
+    }
     if let Some(ty) = field(node, "type") {
         docs.push(print(ctx, ty));
         if name.is_some() {
@@ -2562,4 +2572,34 @@ fn function_pointer_parameter(ctx: &mut Ctx, node: Node) -> Doc {
     } else {
         print(ctx, node)
     }
+}
+
+fn extension_declaration(ctx: &mut Ctx, node: Node) -> Doc {
+    let mut docs = vec![print_attribute_lists(ctx, node)];
+    docs.push(print_token(ctx, kw(node, "extension").unwrap()));
+    if let Some(tpl) = child_of_kind(node, "type_parameter_list") {
+        docs.push(type_parameter_list(ctx, tpl));
+    }
+    docs.push(parameter_list(ctx, child_of_kind(node, "parameter_list").unwrap()));
+    let clauses = children_of_kind(node, "type_parameter_constraints_clause");
+    if !clauses.is_empty() {
+        docs.push(constraint_clauses(ctx, &clauses));
+    }
+    let body = field(node, "body").unwrap();
+    let kids = children(body);
+    let members: Vec<Node> = kids[1..kids.len() - 1].to_vec();
+    if members.is_empty() {
+        docs.push(Doc::text(" "));
+        docs.push(print_token(ctx, kids[0]));
+        docs.push(Doc::text(" "));
+        docs.push(print_token(ctx, *kids.last().unwrap()));
+    } else {
+        let content = remove_initial_double_hard_line(Doc::indent(members::print(ctx, node.kind(), node, &members, false)));
+        docs.push(Doc::hard_line());
+        docs.push(print_token(ctx, kids[0]));
+        docs.push(content);
+        docs.push(Doc::hard_line());
+        docs.push(print_token(ctx, *kids.last().unwrap()));
+    }
+    Doc::concat(docs)
 }

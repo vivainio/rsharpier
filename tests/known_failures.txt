@@ -1,10 +1,5 @@
 # Formatting test files that do not pass yet. See README.md for the reasons.
-cs/Directives_Namespace
-cs/ExtensionDeclarations
-cs/FileEncoding_USC2LEBOM
 cs/IfStatements
-cs/LabeledBreakContinueStatements
 cs/ListPatterns
 cs/MemberAccessExpressions
 cs/TrailingComma
-cs/Unions

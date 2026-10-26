@@ -43,7 +43,7 @@ fn main() {
             }
         }
         let bytes = std::fs::read(file).unwrap();
-        let src = String::from_utf8_lossy(&bytes).trim_start_matches('\u{feff}').to_string();
+        let src = csharpier_rs::cli::decode(&bytes).1;
         let expected_path = file.with_extension("expected.test");
         let expected = if expected_path.exists() {
             std::fs::read_to_string(&expected_path).unwrap().trim_start_matches('\u{feff}').to_string()

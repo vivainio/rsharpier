@@ -288,7 +288,21 @@ export default grammar({
       $.interface_declaration,
       $.delegate_declaration,
       $.record_declaration,
+      $.union_declaration,
     ),
+
+    union_declaration: $ => seq(
+      repeat($._attribute_list),
+      repeat($.modifier),
+      'union',
+      field('name', $.identifier),
+      optional($.type_parameter_list),
+      alias($._union_members, $.parameter_list),
+      repeat($.type_parameter_constraints_clause),
+      $._declaration_list_body,
+    ),
+
+    _union_members: $ => seq('(', commaSep1(alias(field('type', $.type), $.parameter)), ')'),
 
     class_declaration: $ => seq(
       $._class_declaration_initializer,
@@ -529,6 +543,8 @@ export default grammar({
       $.event_declaration,
       $.event_field_declaration,
       $.record_declaration,
+      $.union_declaration,
+      $.extension_declaration,
       $.constructor_declaration,
       $.destructor_declaration,
       $.indexer_declaration,
@@ -538,7 +554,17 @@ export default grammar({
       $.conversion_operator_declaration,
       $.property_declaration,
       $.using_directive,
+      $.extern_alias_directive,
       $.preproc_if,
+    ),
+
+    extension_declaration: $ => seq(
+      repeat($._attribute_list),
+      'extension',
+      optional($.type_parameter_list),
+      $.parameter_list,
+      repeat($.type_parameter_constraints_clause),
+      field('body', $.declaration_list),
     ),
 
     field_declaration: $ => seq(
@@ -963,11 +989,11 @@ export default grammar({
       alias($.preproc_if_in_top_level, $.preproc_if),
     )),
 
-    break_statement: _ => seq('break', ';'),
+    break_statement: $ => seq('break', optional($.identifier), ';'),
 
     checked_statement: $ => seq(choice('checked', 'unchecked'), $.block),
 
-    continue_statement: _ => seq('continue', ';'),
+    continue_statement: $ => seq('continue', optional($.identifier), ';'),
 
     do_statement: $ => seq(
       'do',

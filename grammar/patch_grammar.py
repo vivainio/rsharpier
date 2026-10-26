@@ -110,6 +110,29 @@ rep("      'this',\n      $.member_access_expression,\n      $.conditional_acces
 rep("      optional($._parameter_type_with_modifiers),\n      field('name', $.identifier),", "      optional($._parameter_type_with_modifiers),\n      field('name', $._name_ext),")
 rep("      field('name', $.identifier),\n      optional(seq('=', $.expression)),\n    ),\n\n    bracketed_argument_list", "      field('name', $._name_ext),\n      optional(seq('=', $.expression)),\n    ),\n\n    bracketed_argument_list")
 
+# extern aliases can be in namespaces
+rep("      $.using_directive,\n      $.preproc_if,\n    ),\n\n    field_declaration:", "      $.using_directive,\n      $.extern_alias_directive,\n      $.preproc_if,\n    ),\n\n    field_declaration:")
+
+# labeled break and continue
+rep("    break_statement: _ => seq('break', ';'),", "    break_statement: $ => seq('break', optional($.identifier), ';'),")
+rep("    continue_statement: _ => seq('continue', ';'),", "    continue_statement: $ => seq('continue', optional($.identifier), ';'),")
+
+# unions: public union Pet(Cat, Dog);
+rep("      $.record_declaration,\n    ),\n\n    class_declaration:", "      $.record_declaration,\n      $.union_declaration,\n    ),\n\n    union_declaration: $ => seq(\n      repeat($._attribute_list),\n      repeat($.modifier),\n      'union',\n      field('name', $.identifier),\n      optional($.type_parameter_list),\n      alias($._union_members, $.parameter_list),\n      repeat($.type_parameter_constraints_clause),\n      $._declaration_list_body,\n    ),\n\n    _union_members: $ => seq('(', commaSep1(alias(field('type', $.type), $.parameter)), ')'),\n\n    class_declaration:")
+rep("      $.record_declaration,\n      $.constructor_declaration,", "      $.record_declaration,\n      $.union_declaration,\n      $.extension_declaration,\n      $.constructor_declaration,")
+
+# extension blocks: extension<T>(IEnumerable<T> source) { ... }
+rep("    field_declaration: $ => seq(", """    extension_declaration: $ => seq(
+      repeat($._attribute_list),
+      'extension',
+      optional($.type_parameter_list),
+      $.parameter_list,
+      repeat($.type_parameter_constraints_clause),
+      field('body', $.declaration_list),
+    ),
+
+    field_declaration: $ => seq(""")
+
 open("tree-sitter-c-sharp/grammar.js", "w").write(s)
 
 for i in range(30):

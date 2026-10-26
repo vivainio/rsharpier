@@ -293,8 +293,8 @@ pub fn simple_statement(ctx: &mut Ctx, node: Node) -> Doc {
     let mut docs = vec![extra_new_lines(ctx, node)];
     let kids = children(node);
     for (i, c) in kids.iter().enumerate() {
-        let is_last = i + 1 == kids.len();
-        if !is_last && c.kind() != ";" && kids.len() > 2 {
+        // `break label;` has a space between the keyword and the label
+        if i + 2 < kids.len() {
             docs.push(print_token_with_suffix(ctx, *c, " "));
         } else if c.is_named() && c.child_count() > 0 {
             docs.push(print(ctx, *c));

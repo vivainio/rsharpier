@@ -985,7 +985,7 @@ pub fn format_xml(
     sensitivity: XmlWhitespaceSensitivity,
 ) -> Result<String, XmlError> {
     validate_well_formed(xml)?;
-    let line_ending = crate::format::line_ending(xml);
+    let line_ending = crate::format::get_line_ending(xml, options);
     let normalized = if xml.contains('\r') {
         xml.replace("\r\n", "\n").replace('\r', "\n")
     } else {

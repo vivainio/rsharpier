@@ -50,6 +50,15 @@ fn first_error(src: &str, node: tree_sitter::Node) -> Option<String> {
     None
 }
 
+/// Port of PrinterOptions.GetLineEnding
+pub fn get_line_ending(code: &str, options: &PrinterOptions) -> &'static str {
+    match options.end_of_line {
+        doc::EndOfLine::Lf => "\n",
+        doc::EndOfLine::Crlf => "\r\n",
+        doc::EndOfLine::Auto => line_ending(code),
+    }
+}
+
 pub fn line_ending(code: &str) -> &'static str {
     match code.find('\n') {
         Some(i) if i > 0 && code.as_bytes()[i - 1] == b'\r' => "\r\n",
@@ -130,6 +139,15 @@ pub fn format_with_symbols(
     options: &PrinterOptions,
     symbols: &[String],
 ) -> Result<FormatResult, FormatError> {
+    format_with_symbols_validated(src, options, symbols, true)
+}
+
+fn format_with_symbols_validated(
+    src: &str,
+    options: &PrinterOptions,
+    symbols: &[String],
+    validate_output: bool,
+) -> Result<FormatResult, FormatError> {
     let tree = parse(src);
     let protected = trivia::protected_ranges(tree.root_node());
     let pre = trivia::preprocess(src, &protected, symbols);
@@ -146,14 +164,14 @@ pub fn format_with_symbols(
         tokens: &tokens,
         state: State::default(),
         unhandled: Vec::new(),
-        line_ending: line_ending(src),
+        line_ending: get_line_ending(src, options),
     };
     let doc = printer::print_root(&mut ctx, root);
     if std::env::var_os("CSHARPIER_DUMP_DOC").is_some() {
         eprintln!("{}", doc.dump());
     }
-    let code = doc::print(&doc, options, line_ending(src));
-    if std::env::var_os("CSHARPIER_NO_VALIDATE").is_none() {
+    let code = doc::print(&doc, options, get_line_ending(src, options));
+    if validate_output && std::env::var_os("CSHARPIER_NO_VALIDATE").is_none() {
         validate(src, &code, symbols)?;
     }
     Ok(FormatResult {
@@ -165,19 +183,23 @@ pub fn format_with_symbols(
 /// Formats the code, then formats the result again for every set of preprocessor symbols needed
 /// to activate all `#if` branches, so code in every branch ends up formatted.
 pub fn format(src: &str, options: &PrinterOptions) -> Result<FormatResult, FormatError> {
+    format_with(src, options, true)
+}
+
+pub fn format_with(src: &str, options: &PrinterOptions, validate_output: bool) -> Result<FormatResult, FormatError> {
     if !options.include_generated && begins_with_auto_generated_comment(src) {
         return Ok(FormatResult {
             code: src.to_string(),
             unhandled: vec![],
         });
     }
-    let mut result = format_with_symbols(src, options, &[])?;
+    let mut result = format_with_symbols_validated(src, options, &[], validate_output)?;
 
     let tree = parse(src);
     let protected = trivia::protected_ranges(tree.root_node());
     let pre = trivia::preprocess(src, &protected, &[]);
     for set in crate::symbols::get_sets(&pre.events) {
-        let next = format_with_symbols(&result.code, options, &set)?;
+        let next = format_with_symbols_validated(&result.code, options, &set, validate_output)?;
         result.code = next.code;
         result.unhandled.extend(next.unhandled);
     }

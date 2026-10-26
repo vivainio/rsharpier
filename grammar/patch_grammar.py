@@ -96,6 +96,20 @@ rep("""    element_access_expression: $ => prec(PREC.POSTFIX, seq(
       field('expression', $.expression),""", """    element_access_expression: $ => prec(PREC.POSTFIX, seq(
       field('expression', $._access_target),""")
 
+# and, or and not are only keywords inside of patterns, they can still be names in most places
+rep("    identifier: $ => choice(", """    _name_ext: $ => choice($.identifier, alias(choice('and', 'or', 'not'), $.identifier)),
+
+    identifier: $ => choice(""")
+rep("      choice(field('name', $.identifier), $.tuple_pattern),", "      choice(field('name', $._name_ext), $.tuple_pattern),")
+rep("      field('left', choice($.identifier, $.tuple_pattern)),", "      field('left', choice($._name_ext, $.tuple_pattern)),")
+rep("      optional(field('type', $.type)),\n      field('name', $.identifier),\n      'in',", "      optional(field('type', $.type)),\n      field('name', $._name_ext),\n      'in',")
+rep("      'let',\n      $.identifier,", "      'let',\n      $._name_ext,")
+rep("seq(optional(field('type', $.type)), $.identifier, 'in', $.expression)", "seq(optional(field('type', $.type)), $._name_ext, 'in', $.expression)")
+rep("      alias($.identifier, $.implicit_parameter),", "      alias($._name_ext, $.implicit_parameter),")
+rep("      'this',\n      $.member_access_expression,\n      $.conditional_access_expression,\n      $.tuple_expression,\n      $._simple_name,", "      'this',\n      $.member_access_expression,\n      $.conditional_access_expression,\n      $.tuple_expression,\n      $._simple_name,\n      alias(choice('and', 'or', 'not'), $.identifier),")
+rep("      optional($._parameter_type_with_modifiers),\n      field('name', $.identifier),", "      optional($._parameter_type_with_modifiers),\n      field('name', $._name_ext),")
+rep("      field('name', $.identifier),\n      optional(seq('=', $.expression)),\n    ),\n\n    bracketed_argument_list", "      field('name', $._name_ext),\n      optional(seq('=', $.expression)),\n    ),\n\n    bracketed_argument_list")
+
 open("tree-sitter-c-sharp/grammar.js", "w").write(s)
 
 for i in range(30):

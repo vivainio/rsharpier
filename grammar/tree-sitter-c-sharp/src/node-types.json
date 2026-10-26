@@ -3211,7 +3211,17 @@
   {
     "type": "implicit_parameter",
     "named": true,
-    "fields": {}
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "identifier",
+          "named": true
+        }
+      ]
+    }
   },
   {
     "type": "implicit_stackalloc_expression",

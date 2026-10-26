@@ -257,7 +257,7 @@ pub fn print(ctx: &mut Ctx, node: Node) -> Doc {
         "identifier" | "predefined_type" | "implicit_type" | "integer_literal" | "real_literal"
         | "string_literal" | "verbatim_string_literal" | "raw_string_literal"
         | "character_literal" | "boolean_literal" | "null_literal" | "this_expression"
-        | "modifier" | "discard" => print_token(ctx, node),
+        | "modifier" | "discard" | "implicit_parameter" => print_token(ctx, node),
         "interpolated_string_expression" => strings::interpolated_string_expression(ctx, node),
         "throw_expression" => {
             let kids = children(node);

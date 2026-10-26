@@ -8,7 +8,7 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
-pub use printer::{print, PrinterOptions};
+pub use printer::{print, EndOfLine, PrinterOptions};
 
 pub type GroupId = u32;
 

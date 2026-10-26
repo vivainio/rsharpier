@@ -44,8 +44,15 @@ export default grammar({
   name: 'c_sharp',
 
   conflicts: $ => [
+    [$.event_declaration, $._name_ext],
+    [$.tuple_element, $._name_ext],
     [$.constant_pattern, $.non_lvalue_expression, $._access_target],
     [$.constant_pattern, $._expression_statement_expression, $._access_target],
+    [$.negated_pattern, $.lvalue_expression],
+    [$.tuple_pattern, $._name_ext],
+    [$.tuple_element, $.declaration_expression, $._name_ext],
+    [$._simple_name, $._name_ext],
+    [$.lvalue_expression, $._name_ext],
     [$.non_lvalue_expression, $._expression_statement_expression, $._access_target],
     [$.non_lvalue_expression, $.lvalue_expression, $._access_target],
     [$.non_lvalue_expression, $.lvalue_expression],
@@ -668,7 +675,7 @@ export default grammar({
     parameter: $ => seq(
       repeat($._attribute_list),
       optional($._parameter_type_with_modifiers),
-      field('name', $.identifier),
+      field('name', $._name_ext),
       optional(seq('=', $.expression)),
     ),
 
@@ -727,13 +734,13 @@ export default grammar({
     ),
 
     variable_declarator: $ => seq(
-      choice(field('name', $.identifier), $.tuple_pattern),
+      choice(field('name', $._name_ext), $.tuple_pattern),
       optional($.bracketed_argument_list),
       optional(seq('=', $.expression)),
     ),
 
     using_variable_declarator: $ => seq(
-      field('name', $.identifier),
+      field('name', $._name_ext),
       optional(seq('=', $.expression)),
     ),
 
@@ -1091,7 +1098,7 @@ export default grammar({
       choice(
         seq(
           field('type', $.type),
-          field('left', choice($.identifier, $.tuple_pattern)),
+          field('left', choice($._name_ext, $.tuple_pattern)),
         ),
         field('left', $.expression),
       ),
@@ -1412,6 +1419,7 @@ export default grammar({
       $.conditional_access_expression,
       $.tuple_expression,
       $._simple_name,
+      alias(choice('and', 'or', 'not'), $.identifier),
       $.element_access_expression,
       alias($.bracketed_argument_list, $.element_binding_expression),
       alias($._pointer_indirection_expression, $.prefix_unary_expression),
@@ -1508,7 +1516,7 @@ export default grammar({
     from_clause: $ => seq(
       'from',
       optional(field('type', $.type)),
-      field('name', $.identifier),
+      field('name', $._name_ext),
       'in',
       $.expression,
     ),
@@ -1536,7 +1544,7 @@ export default grammar({
       optional($.join_into_clause),
     ),
 
-    _join_header: $ => seq(optional(field('type', $.type)), $.identifier, 'in', $.expression),
+    _join_header: $ => seq(optional(field('type', $.type)), $._name_ext, 'in', $.expression),
 
     _join_body: $ => seq('on', $.expression, 'equals', $.expression),
 
@@ -1544,7 +1552,7 @@ export default grammar({
 
     let_clause: $ => seq(
       'let',
-      $.identifier,
+      $._name_ext,
       '=',
       $.expression,
     ),
@@ -1776,7 +1784,7 @@ export default grammar({
 
     _lambda_parameters: $ => prec(-1, choice(
       $.parameter_list,
-      alias($.identifier, $.implicit_parameter),
+      alias($._name_ext, $.implicit_parameter),
     )),
 
     array_creation_expression: $ => prec.dynamic(PREC.UNARY, seq(
@@ -2036,6 +2044,8 @@ export default grammar({
     boolean_literal: _ => choice('true', 'false'),
 
     _identifier_token: _ => token(seq(optional('@'), /(\p{XID_Start}|_|\\u[0-9A-Fa-f]{4}|\\U[0-9A-Fa-f]{8})(\p{XID_Continue}|\\u[0-9A-Fa-f]{4}|\\U[0-9A-Fa-f]{8})*/)),
+    _name_ext: $ => choice($.identifier, alias(choice('and', 'or', 'not'), $.identifier)),
+
     identifier: $ => choice(
       $._identifier_token,
       $._reserved_identifier,

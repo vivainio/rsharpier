@@ -6,8 +6,18 @@ use super::fitter;
 use super::propagate_breaks;
 use super::{CommentDoc, CommentType, Doc, GroupDoc, GroupId, LineDoc, LineType, StrDoc};
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum EndOfLine {
+    /// use the line ending of the first line of the source
+    #[default]
+    Auto,
+    Lf,
+    Crlf,
+}
+
 #[derive(Clone, Debug)]
 pub struct PrinterOptions {
+    pub end_of_line: EndOfLine,
     pub width: usize,
     pub indent_size: usize,
     pub use_tabs: bool,
@@ -18,6 +28,7 @@ pub struct PrinterOptions {
 impl Default for PrinterOptions {
     fn default() -> Self {
         PrinterOptions {
+            end_of_line: EndOfLine::Auto,
             width: 100,
             indent_size: 4,
             use_tabs: false,

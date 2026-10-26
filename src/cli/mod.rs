@@ -73,6 +73,7 @@ pub struct Logger {
     lock: Mutex<()>,
     out: Mutex<Box<dyn Write + Send>>,
     err: Mutex<Box<dyn Write + Send>>,
+    pending_warnings: Arc<Mutex<Vec<String>>>,
 }
 
 impl Logger {
@@ -83,12 +84,13 @@ impl Logger {
             lock: Mutex::new(()),
             out: Mutex::new(Box::new(std::io::stdout())),
             err: Mutex::new(Box::new(std::io::stderr())),
+            pending_warnings: Default::default(),
         }
     }
 
     /// for tests: capture output
     pub fn with_writers(level: LogLevel, format: LogFormat, out: Box<dyn Write + Send>, err: Box<dyn Write + Send>) -> Logger {
-        Logger { level, format, lock: Mutex::new(()), out: Mutex::new(out), err: Mutex::new(err) }
+        Logger { level, format, lock: Mutex::new(()), out: Mutex::new(out), err: Mutex::new(err), pending_warnings: Default::default() }
     }
 
     fn write(&self, level: LogLevel, message: &str) {
@@ -119,6 +121,19 @@ impl Logger {
             let _ = self.err.lock().unwrap().write_all(text.as_bytes());
         } else {
             let _ = self.out.lock().unwrap().write_all(text.as_bytes());
+        }
+    }
+
+    /// a function that logs warnings, usable from other threads
+    pub fn warning_sink(&self) -> impl Fn(String) + Send + Sync + 'static {
+        let queue = self.pending_warnings.clone();
+        move |m| queue.lock().unwrap().push(m)
+    }
+
+    fn flush_warnings(&self) {
+        let pending: Vec<String> = std::mem::take(&mut *self.pending_warnings.lock().unwrap());
+        for m in pending {
+            self.write(LogLevel::Warning, &m);
         }
     }
 
@@ -528,6 +543,8 @@ pub fn run_with(mut opts: CommandLineOptions, logger: &Logger, stdin: &mut dyn R
             return 1;
         }
     };
+    let warning_sink = logger.warning_sink();
+    let provider = provider.with_warnings(move |m| warning_sink(m));
     let engine = Engine {
         opts: &opts,
         logger,
@@ -605,6 +622,7 @@ pub fn run_with(mut opts: CommandLineOptions, logger: &Logger, stdin: &mut dyn R
         files.par_iter().for_each(|f| engine.format_file(f, &writer));
     }
 
+    logger.flush_warnings();
     if !opts.write_stdout {
         logger.info(&format!(
             "{} {} files in {}ms.",

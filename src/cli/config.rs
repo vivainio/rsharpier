@@ -305,6 +305,8 @@ impl EditorConfigSections {
 pub struct OptionsProvider {
     specified_config: Option<CSharpierConfig>,
     specified_editorconfig: Option<EditorConfigSections>,
+    warn: Option<Box<dyn Fn(String) + Send + Sync>>,
+    warned: std::sync::Mutex<std::collections::HashSet<PathBuf>>,
 }
 
 impl OptionsProvider {
@@ -318,7 +320,27 @@ impl OptionsProvider {
                 specified_config = Some(CSharpierConfig::from_file(p)?);
             }
         }
-        Ok(OptionsProvider { specified_config, specified_editorconfig })
+        Ok(OptionsProvider {
+            specified_config,
+            specified_editorconfig,
+            warn: None,
+            warned: Default::default(),
+        })
+    }
+
+    /// reports problems with configuration files, like empty ones
+    pub fn with_warnings(mut self, warn: impl Fn(String) + Send + Sync + 'static) -> OptionsProvider {
+        self.warn = Some(Box::new(warn));
+        self
+    }
+
+    fn warn_if_empty(&self, cfg: &Path) {
+        let empty = std::fs::read_to_string(cfg).map(|c| c.trim().is_empty()).unwrap_or(false);
+        if empty && self.warned.lock().unwrap().insert(cfg.to_path_buf()) {
+            if let Some(w) = &self.warn {
+                w(format!("The configuration file at {} was empty.", cfg.display()));
+            }
+        }
     }
 
     pub fn options_for(&self, file_path: &Path) -> Option<FileOptions> {
@@ -334,6 +356,7 @@ impl OptionsProvider {
         while let Some(d) = cur {
             if d.is_dir() {
                 if let Some(cfg) = find_config_file_in(&d) {
+                    self.warn_if_empty(&cfg);
                     return match CSharpierConfig::from_file(&cfg) {
                         Ok(c) => c.options_for(&fp),
                         Err(_) => FileOptions::default_for_path(&fp),

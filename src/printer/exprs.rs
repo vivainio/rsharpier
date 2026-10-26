@@ -260,7 +260,7 @@ fn lambda_head(ctx: &mut Ctx, node: Node) -> Doc {
     let mut docs = Vec::new();
     docs.push(print_attribute_lists_pub(ctx, node));
     docs.push(print_modifiers_pub(ctx, node));
-    if let Some(ret) = field(node, "returns") {
+    if let Some(ret) = field(node, "returns").or_else(|| field(node, "type")) {
         docs.push(concat![print(ctx, ret), " "]);
     }
     let params = field(node, "parameters").unwrap();

@@ -97,14 +97,35 @@ pub fn print(ctx: &mut Ctx, node: Node) -> Doc {
             concat_children(ctx, node)
         }
         "assignment_expression" => assignment_expression(ctx, node),
-        "member_access_expression" | "invocation_expression" => member_chain_simple(ctx, node),
+        "member_access_expression" | "invocation_expression" | "conditional_access_expression" => {
+            chain::print_member_chain(ctx, node)
+        }
+        "member_binding_expression" => concat_children(ctx, node),
+        "postfix_unary_expression"
+            if node.child(1).map(|o| o.kind() == "!").unwrap_or(false)
+                && node.child(0).map(|o| o.kind() == "invocation_expression").unwrap_or(false) =>
+        {
+            chain::print_member_chain(ctx, node)
+        }
 
         "qualified_name" | "alias_qualified_name" | "explicit_interface_specifier" => {
             concat_children(ctx, node)
         }
         "type_argument_list" => type_argument_list(ctx, node),
-        "generic_name" | "nullable_type" | "array_type" | "pointer_type" | "ref_type"
-        | "tuple_type" => concat_children(ctx, node),
+        "generic_name" => Doc::group_of(concat_children(ctx, node)),
+        "ref_type" | "ref_expression" => {
+            let kids = children(node);
+            let mut docs = Vec::new();
+            for (i, c) in kids.iter().enumerate() {
+                if i + 1 < kids.len() {
+                    docs.push(print_token_with_suffix(ctx, *c, " "));
+                } else {
+                    docs.push(print_child(ctx, *c));
+                }
+            }
+            Doc::concat(docs)
+        }
+        "nullable_type" | "array_type" | "pointer_type" | "tuple_type" => concat_children(ctx, node),
         "await_expression" => {
             let kids = children(node);
             concat![print_token_with_suffix(ctx, kids[0], " "), print(ctx, kids[1])]
@@ -946,7 +967,13 @@ pub(super) fn variable_declaration(ctx: &mut Ctx, node: Node) -> Doc {
     let variable = declarators[0];
     let kids = children(variable);
     let name = field(variable, "name").unwrap_or(kids[0]);
-    let left = concat![print(ctx, ty), " ", print_token(ctx, name)];
+    let mut left_docs = vec![print(ctx, ty), Doc::text(" "), print_token(ctx, name)];
+    for c in &kids {
+        if c.kind() == "bracketed_argument_list" {
+            left_docs.push(print(ctx, *c));
+        }
+    }
+    let left = Doc::concat(left_docs);
     match kids.iter().position(|c| c.kind() == "=") {
         None => Doc::group_of(left),
         Some(eq) => {
@@ -1008,8 +1035,11 @@ pub(super) fn property_declaration(ctx: &mut Ctx, node: Node) -> Doc {
         print_modifiers(ctx, node),
         print(ctx, field(node, "type").unwrap()),
         Doc::text(" "),
-        print_token(ctx, field(node, "name").unwrap()),
     ];
+    if let Some(spec) = child_of_kind(node, "explicit_interface_specifier") {
+        docs.push(concat_children(ctx, spec));
+    }
+    docs.push(print_token(ctx, field(node, "name").unwrap()));
     if let Some(accessors) = field(node, "accessors") {
         docs.push(accessor_list(ctx, accessors));
     } else if let Some(arrow) = child_of_kind(node, "arrow_expression_clause") {
@@ -1236,7 +1266,12 @@ pub(super) fn block(ctx: &mut Ctx, node: Node) -> Doc {
     }
 
     let result = group!(
-        if matches!(parent_kind, "lambda_expression" | "block" | "global_statement") {
+        if matches!(parent_kind, "block" | "global_statement")
+            || (parent_kind == "lambda_expression"
+                && field(node.parent().unwrap(), "parameters")
+                    .map(|p| p.kind() != "implicit_parameter")
+                    .unwrap_or(false))
+        {
             Doc::Null
         } else {
             Doc::line()
@@ -1853,4 +1888,8 @@ fn fixed_statement(ctx: &mut Ctx, node: Node) -> Doc {
             )
         }
     ]
+}
+
+pub(super) fn concat_children_pub(ctx: &mut Ctx, node: Node) -> Doc {
+    concat_children(ctx, node)
 }

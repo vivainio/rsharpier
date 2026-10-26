@@ -1,5 +1,6 @@
 //! Port of CSharpier.Core/CSharp/SyntaxPrinter on top of tree-sitter nodes.
 
+mod chain;
 mod exprs;
 mod members;
 mod patterns;

@@ -3,6 +3,7 @@
 pub mod config;
 pub mod glob;
 pub mod ignore_file;
+pub mod server;
 
 use std::io::{IsTerminal, Read, Write};
 use std::path::{Path, PathBuf};
@@ -513,6 +514,32 @@ impl Engine<'_> {
     }
 }
 
+/// Formats the contents of a file that was piped in, returns the exit code and the formatted code
+fn format_standard_input(engine: &Engine, contents: &str, stdin_path: Option<&str>) -> (i32, Option<String>) {
+    let cwd = std::env::current_dir().unwrap_or_default();
+    let (file_path, path_supplied) = match stdin_path {
+        Some(p) => (full_path(p), true),
+        None => {
+            let ext = if contents.trim_start().starts_with('<') { "xml" } else { "cs" };
+            (cwd.join(format!("stdin.{ext}")), false)
+        }
+    };
+    // ignored files and files of unknown types are not written
+    if path_supplied && engine.is_ignored(&file_path, false, None).unwrap_or(false) {
+        return (0, None);
+    }
+    let Some(options) = engine.provider.options_for(&file_path) else { return (0, None) };
+    if options.formatter == Formatter::Unknown {
+        return (0, None);
+    }
+    let result: Mutex<Option<String>> = Mutex::new(None);
+    let capture = |_: &Path, code: &str, _: Encoding, _: &str| {
+        *result.lock().unwrap() = Some(code.to_string());
+    };
+    engine.format_steps(&file_path, stdin_path.unwrap_or("stdin"), contents, Encoding::Utf8, &options, &capture);
+    (engine.exit_code(), result.into_inner().unwrap())
+}
+
 /// Runs `format` or `check`, returns the exit code
 pub fn run(opts: CommandLineOptions) -> i32 {
     let logger = Logger::new(opts.log_level, opts.log_format);
@@ -555,28 +582,11 @@ pub fn run_with(mut opts: CommandLineOptions, logger: &Logger, stdin: &mut dyn R
     };
 
     if let Some(contents) = standard_in {
-        let cwd = std::env::current_dir().unwrap_or_default();
-        let (file_path, path_supplied) = match &opts.stdin_path {
-            Some(p) => (full_path(p), true),
-            None => {
-                let ext = if contents.trim_start().starts_with('<') { "xml" } else { "cs" };
-                (cwd.join(format!("stdin.{ext}")), false)
-            }
-        };
-        if path_supplied && engine.is_ignored(&file_path, false, None).unwrap_or(false) {
-            // ignored files are written back untouched
-            print!("{contents}");
-            return 0;
+        let (code, formatted) = format_standard_input(&engine, &contents, opts.stdin_path.as_deref());
+        if let Some(f) = formatted {
+            let _ = std::io::stdout().write_all(f.as_bytes());
         }
-        let Some(options) = engine.provider.options_for(&file_path) else {
-            print!("{contents}");
-            return 0;
-        };
-        let stdout_writer = |_: &Path, code: &str, _: Encoding, _: &str| {
-            let _ = std::io::stdout().write_all(code.as_bytes());
-        };
-        engine.format_steps(&file_path, opts.stdin_path.as_deref().unwrap_or("stdin"), &contents, Encoding::Utf8, &options, &stdout_writer);
-        return engine.exit_code();
+        return code;
     }
 
     // physical files
@@ -632,4 +642,56 @@ pub fn run_with(mut opts: CommandLineOptions, logger: &Logger, stdin: &mut dyn R
         ));
     }
     engine.exit_code()
+}
+
+/// `pipe-files`: files are piped to stdin as `path \u{3} contents \u{3}`, the formatted code
+/// is written back to stdout followed by `\u{3}`.
+pub fn pipe_files() -> i32 {
+    let mut input = Vec::new();
+    let mut exit_code = 0;
+    let mut stdin = std::io::stdin().lock();
+    let mut file_name: Option<String> = None;
+    let mut buf = [0u8; 8192];
+    let mut chunk: Vec<u8> = Vec::new();
+    loop {
+        let n = stdin.read(&mut buf).unwrap_or(0);
+        if n == 0 {
+            return exit_code;
+        }
+        input.extend_from_slice(&buf[..n]);
+        // split on the end of text marker
+        while let Some(pos) = input.iter().position(|b| *b == 0x03) {
+            chunk.clear();
+            chunk.extend_from_slice(&input[..pos]);
+            input.drain(..=pos);
+            let text = String::from_utf8_lossy(&chunk).into_owned();
+            match file_name.take() {
+                None => file_name = Some(text),
+                Some(name) => {
+                    let opts = CommandLineOptions { skip_validation: true, write_stdout: true, ..Default::default() };
+                    let logger = Logger::new(LogLevel::Information, LogFormat::Console);
+                    let provider = OptionsProvider::new(None).unwrap();
+                    let engine = Engine {
+                        opts: &opts,
+                        logger: &logger,
+                        provider,
+                        ignore_files: Mutex::new(Default::default()),
+                        specified_ignore: None,
+                        counters: Counters::default(),
+                    };
+                    let path = if Path::new(&name).is_absolute() { name.clone() } else { format!("./{name}") };
+                    let (code, formatted) = format_standard_input(&engine, &text, Some(&path));
+                    if code != 0 {
+                        exit_code = code;
+                    }
+                    let mut out = std::io::stdout().lock();
+                    if let Some(f) = formatted {
+                        let _ = out.write_all(f.as_bytes());
+                    }
+                    let _ = out.write_all(&[0x03]);
+                    let _ = out.flush();
+                }
+            }
+        }
+    }
 }

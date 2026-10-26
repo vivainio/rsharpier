@@ -87,6 +87,14 @@ enum Command {
         #[arg(long)]
         unformatted_as_warnings: bool,
     },
+    /// Keep rsharpier running so that multiples files can be piped to it via stdin.
+    PipeFiles,
+    /// Run rsharpier as a server so that multiple files may be formatted.
+    Server {
+        /// Specify the port that rsharpier should start on. Defaults to a random unused port.
+        #[arg(long)]
+        server_port: Option<u16>,
+    },
 }
 
 fn common_options(c: Common) -> CommandLineOptions {
@@ -114,6 +122,8 @@ fn common_options(c: Common) -> CommandLineOptions {
 fn main() {
     let cli = Cli::parse();
     let options = match cli.command {
+        Command::PipeFiles => std::process::exit(cli::pipe_files()),
+        Command::Server { server_port } => std::process::exit(cli::server::run_server(server_port)),
         Command::Format { common, skip_validation, skip_write, write_stdout, stdin_path, .. } => CommandLineOptions {
             skip_validation,
             skip_write,

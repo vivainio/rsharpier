@@ -46,20 +46,25 @@ export default grammar({
   conflicts: $ => [
     [$.event_declaration, $._name_ext],
     [$.tuple_element, $._name_ext],
+    [$.constant_pattern, $.lvalue_expression, $._expression_statement_expression],
     [$.constant_pattern, $.non_lvalue_expression, $._access_target],
     [$.constant_pattern, $._expression_statement_expression, $._access_target],
+    [$._name, $.constant_pattern, $.lvalue_expression, $._expression_statement_expression],
     [$.negated_pattern, $.lvalue_expression],
     [$.tuple_pattern, $._name_ext],
     [$.tuple_element, $.declaration_expression, $._name_ext],
     [$._simple_name, $._name_ext],
     [$.lvalue_expression, $._name_ext],
     [$.non_lvalue_expression, $._expression_statement_expression, $._access_target],
-    [$.non_lvalue_expression, $.lvalue_expression, $._access_target],
-    [$.non_lvalue_expression, $.lvalue_expression],
+    [$.non_lvalue_expression, $.lvalue_expression, $._expression_statement_expression, $._access_target],
+    [$.non_lvalue_expression, $.lvalue_expression, $._expression_statement_expression],
     [$.lvalue_expression, $._access_target],
     [$._expression_statement_expression, $._access_target],
     [$.expression, $._access_target],
+    [$.lvalue_expression, $._expression_statement_expression],
+    [$._name, $.lvalue_expression, $._expression_statement_expression],
     [$.non_lvalue_expression, $._access_target],
+    [$.range_expression, $.slice_pattern],
     [$._simple_name, $.generic_name],
     [$._simple_name, $.type_parameter],
     [$._simple_name, $.subpattern],
@@ -1277,7 +1282,7 @@ export default grammar({
 
     type_pattern: $ => prec.right(field('type', $.type)),
 
-    slice_pattern: $ => prec.right(seq('..', optional($.pattern))),
+    slice_pattern: $ => prec.right(PREC.RANGE + 1, seq('..', optional($.pattern))),
 
     list_pattern: $ => prec.right(seq(
       '[',
@@ -1462,6 +1467,9 @@ export default grammar({
       $.object_creation_expression,
       $.parenthesized_expression,
       $.checked_expression,
+      $.member_access_expression,
+      $.conditional_access_expression,
+      $._simple_name,
     ),
 
     assignment_expression: $ => seq(

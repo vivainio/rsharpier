@@ -252,6 +252,14 @@
         "named": true
       },
       {
+        "type": "generic_name",
+        "named": true
+      },
+      {
+        "type": "identifier",
+        "named": true
+      },
+      {
         "type": "implicit_array_creation_expression",
         "named": true
       },
@@ -293,6 +301,10 @@
       },
       {
         "type": "makeref_expression",
+        "named": true
+      },
+      {
+        "type": "member_access_expression",
         "named": true
       },
       {
@@ -2729,7 +2741,23 @@
           "named": true
         },
         {
+          "type": "conditional_access_expression",
+          "named": true
+        },
+        {
+          "type": "generic_name",
+          "named": true
+        },
+        {
+          "type": "identifier",
+          "named": true
+        },
+        {
           "type": "invocation_expression",
+          "named": true
+        },
+        {
+          "type": "member_access_expression",
           "named": true
         },
         {

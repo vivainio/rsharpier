@@ -1,5 +1,1 @@
 # Formatting test files that do not pass yet. See README.md for the reasons.
-cs/IfStatements
-cs/ListPatterns
-cs/MemberAccessExpressions
-cs/TrailingComma

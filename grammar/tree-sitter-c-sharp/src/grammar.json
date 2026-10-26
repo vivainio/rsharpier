@@ -6337,7 +6337,7 @@
     },
     "slice_pattern": {
       "type": "PREC_RIGHT",
-      "value": 0,
+      "value": 17,
       "content": {
         "type": "SEQ",
         "members": [
@@ -7322,6 +7322,18 @@
         {
           "type": "SYMBOL",
           "name": "checked_expression"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "member_access_expression"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "conditional_access_expression"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "_simple_name"
         }
       ]
     },
@@ -12753,6 +12765,11 @@
     ],
     [
       "constant_pattern",
+      "lvalue_expression",
+      "_expression_statement_expression"
+    ],
+    [
+      "constant_pattern",
       "non_lvalue_expression",
       "_access_target"
     ],
@@ -12760,6 +12777,12 @@
       "constant_pattern",
       "_expression_statement_expression",
       "_access_target"
+    ],
+    [
+      "_name",
+      "constant_pattern",
+      "lvalue_expression",
+      "_expression_statement_expression"
     ],
     [
       "negated_pattern",
@@ -12790,11 +12813,13 @@
     [
       "non_lvalue_expression",
       "lvalue_expression",
+      "_expression_statement_expression",
       "_access_target"
     ],
     [
       "non_lvalue_expression",
-      "lvalue_expression"
+      "lvalue_expression",
+      "_expression_statement_expression"
     ],
     [
       "lvalue_expression",
@@ -12809,8 +12834,21 @@
       "_access_target"
     ],
     [
+      "lvalue_expression",
+      "_expression_statement_expression"
+    ],
+    [
+      "_name",
+      "lvalue_expression",
+      "_expression_statement_expression"
+    ],
+    [
       "non_lvalue_expression",
       "_access_target"
+    ],
+    [
+      "range_expression",
+      "slice_pattern"
     ],
     [
       "_simple_name",

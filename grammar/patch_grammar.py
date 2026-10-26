@@ -80,7 +80,7 @@ rep("generic_name: $ => seq($.identifier, $.type_argument_list),",
 
 # list patterns: `[.., x]` and `[..]` are slice patterns
 rep("commaSep1(choice($.pattern, '..')),", "commaSep1(choice($.pattern, $.slice_pattern)),")
-rep("    list_pattern: $ => prec.right(seq(", "    slice_pattern: $ => prec.right(seq('..', optional($.pattern))),\n\n    list_pattern: $ => prec.right(seq(")
+rep("    list_pattern: $ => prec.right(seq(", "    slice_pattern: $ => prec.right(PREC.RANGE + 1, seq('..', optional($.pattern))),\n\n    list_pattern: $ => prec.right(seq(")
 
 rep("      $.and_pattern,\n      $.list_pattern,", "      $.and_pattern,\n      prec.dynamic(5, $.list_pattern),")
 
@@ -132,6 +132,12 @@ rep("    field_declaration: $ => seq(", """    extension_declaration: $ => seq(
     ),
 
     field_declaration: $ => seq(""")
+
+# Roslyn accepts any expression as a statement, the errors for that are semantic
+rep("      $.parenthesized_expression,\n      $.checked_expression,\n    ),", "      $.parenthesized_expression,\n      $.checked_expression,\n      $.member_access_expression,\n      $.conditional_access_expression,\n      $._simple_name,\n    ),")
+
+# `[..]` can be a collection expression or a list pattern, let both parse
+rep("  conflicts: $ => [\n", "  conflicts: $ => [\n    [$.range_expression, $.slice_pattern],\n")
 
 open("tree-sitter-c-sharp/grammar.js", "w").write(s)
 

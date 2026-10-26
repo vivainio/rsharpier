@@ -8425,6 +8425,14 @@
         },
         {
           "type": "SYMBOL",
+          "name": "implicit_array_creation_expression"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "anonymous_object_creation_expression"
+        },
+        {
+          "type": "SYMBOL",
           "name": "lvalue_expression"
         }
       ]
@@ -8817,7 +8825,7 @@
             "name": "expression",
             "content": {
               "type": "SYMBOL",
-              "name": "expression"
+              "name": "_access_target"
             }
           },
           {
@@ -9102,7 +9110,7 @@
               "members": [
                 {
                   "type": "SYMBOL",
-                  "name": "expression"
+                  "name": "_access_target"
                 },
                 {
                   "type": "SYMBOL",
@@ -12499,6 +12507,10 @@
     [
       "non_lvalue_expression",
       "lvalue_expression"
+    ],
+    [
+      "lvalue_expression",
+      "_access_target"
     ],
     [
       "_expression_statement_expression",

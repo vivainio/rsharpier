@@ -66,6 +66,8 @@ rep("""    conditional_access_expression: $ => prec.right(PREC.CONDITIONAL, seq(
       $.typeof_expression,
       $.array_creation_expression,
       $.implicit_object_creation_expression,
+      $.implicit_array_creation_expression,
+      $.anonymous_object_creation_expression,
       $.lvalue_expression,
     ),
 
@@ -87,6 +89,12 @@ rep("sep(choice($.parameter, $._parameter_array), ','),", "sep(choice($.paramete
 
 # null-conditional assignment: a?.b = c
 rep("      'this',\n      $.member_access_expression,\n      $.tuple_expression,", "      'this',\n      $.member_access_expression,\n      $.conditional_access_expression,\n      $.tuple_expression,")
+
+# `x is A.B or C.D` must not parse as `(x is A.B or C).D`: only primary expressions can be accessed
+rep("field('expression', choice($.expression, $.predefined_type, $._name)),", "field('expression', choice($._access_target, $.predefined_type, $._name)),")
+rep("""    element_access_expression: $ => prec(PREC.POSTFIX, seq(
+      field('expression', $.expression),""", """    element_access_expression: $ => prec(PREC.POSTFIX, seq(
+      field('expression', $._access_target),""")
 
 open("tree-sitter-c-sharp/grammar.js", "w").write(s)
 

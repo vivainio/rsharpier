@@ -49,6 +49,7 @@ export default grammar({
     [$.non_lvalue_expression, $._expression_statement_expression, $._access_target],
     [$.non_lvalue_expression, $.lvalue_expression, $._access_target],
     [$.non_lvalue_expression, $.lvalue_expression],
+    [$.lvalue_expression, $._access_target],
     [$._expression_statement_expression, $._access_target],
     [$.expression, $._access_target],
     [$.non_lvalue_expression, $._access_target],
@@ -1592,6 +1593,8 @@ export default grammar({
       $.typeof_expression,
       $.array_creation_expression,
       $.implicit_object_creation_expression,
+      $.implicit_array_creation_expression,
+      $.anonymous_object_creation_expression,
       $.lvalue_expression,
     ),
 
@@ -1671,7 +1674,7 @@ export default grammar({
     throw_expression: $ => seq('throw', $.expression),
 
     element_access_expression: $ => prec(PREC.POSTFIX, seq(
-      field('expression', $.expression),
+      field('expression', $._access_target),
       field('subscript', $.bracketed_argument_list),
     )),
 
@@ -1725,7 +1728,7 @@ export default grammar({
     interpolation_format_clause: _ => seq(':', /[^}"]+/),
 
     member_access_expression: $ => prec(PREC.DOT, seq(
-      field('expression', choice($.expression, $.predefined_type, $._name)),
+      field('expression', choice($._access_target, $.predefined_type, $._name)),
       choice('.', '->'),
       field('name', $._simple_name),
     )),

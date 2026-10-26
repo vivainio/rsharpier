@@ -52,6 +52,45 @@ pub fn print(ctx: &mut Ctx, node: Node) -> Doc {
         "tuple_expression" => exprs::tuple_expression(ctx, node),
         "collection_expression" => exprs::collection_expression(ctx, node),
         "is_pattern_expression" if is_binary_like(ctx, node) => binary_expression(ctx, node),
+        "is_expression" => binary_expression(ctx, node),
+        "query_expression" => query::query_expression(ctx, node),
+        "from_clause" | "select_clause" | "where_clause" | "let_clause" | "group_clause"
+        | "order_by_clause" | "join_clause" => unhandled(ctx, node),
+        "record_declaration" | "record_struct_declaration" => type_declaration(ctx, node),
+        "operator_declaration" | "conversion_operator_declaration" => method_declaration(ctx, node),
+        "indexer_declaration" | "event_declaration" => property_declaration(ctx, node),
+        "bracketed_parameter_list" => parameter_list(ctx, node),
+        "primary_constructor_base_type" => concat_children(ctx, node),
+        "constructor_constraint" => concat_children(ctx, node),
+        "makeref_expression" | "reftype_expression" | "refvalue_expression" => {
+            let kids = children(node);
+            let mut docs = Vec::new();
+            for c in &kids {
+                if c.kind() == "," {
+                    docs.push(print_token_with_suffix(ctx, *c, " "));
+                } else {
+                    docs.push(print_child(ctx, *c));
+                }
+            }
+            Doc::concat(docs)
+        }
+        "checked_statement" => {
+            let kids = children(node);
+            concat![print_token(ctx, kids[0]), block(ctx, kids[1])]
+        }
+        "checked_expression" => {
+            let kids = children(node);
+            concat![
+                print_token(ctx, kids[0]),
+                group!(
+                    print_token(ctx, kids[1]),
+                    indent!(Doc::soft_line(), print(ctx, kids[2])),
+                    Doc::soft_line(),
+                    print_token(ctx, kids[3])
+                )
+            ]
+        }
+        "function_pointer_type" => function_pointer_type(ctx, node),
         "as_expression" => binary_expression(ctx, node),
         "is_pattern_expression" => patterns::is_pattern_expression(ctx, node),
         "declaration_pattern" => patterns::declaration_pattern(ctx, node),
@@ -88,7 +127,15 @@ pub fn print(ctx: &mut Ctx, node: Node) -> Doc {
         "delegate_declaration" => delegate_declaration(ctx, node),
         "enum_declaration" => enum_declaration(ctx, node),
         "enum_member_declaration" => enum_member_declaration(ctx, node),
-        "type_parameter_constraint" => concat_children(ctx, node),
+        "type_parameter_constraint" => {
+            let kids = children(node);
+            if kids.first().map(|k| k.kind() == "allows").unwrap_or(false) {
+                let docs: Vec<Doc> = kids.iter().map(|k| print_token(ctx, *k)).collect();
+                Doc::join(Doc::text(" "), docs)
+            } else {
+                concat_children(ctx, node)
+            }
+        }
         "anonymous_object_creation_expression" => anonymous_object_creation(ctx, node),
         "fixed_statement" => fixed_statement(ctx, node),
         "while_statement" => stmts::while_statement(ctx, node),
@@ -101,7 +148,7 @@ pub fn print(ctx: &mut Ctx, node: Node) -> Doc {
         "throw_statement" => stmts::throw_statement(ctx, node),
         "yield_statement" => stmts::yield_statement(ctx, node),
         "break_statement" | "continue_statement" | "empty_statement" => stmts::simple_statement(ctx, node),
-        "typeof_expression" | "default_expression" | "sizeof_expression" | "checked_expression" => {
+        "typeof_expression" | "default_expression" | "sizeof_expression" => {
             concat_children(ctx, node)
         }
         "assignment_expression" => assignment_expression(ctx, node),
@@ -1060,9 +1107,16 @@ pub(super) fn attribute_argument(ctx: &mut Ctx, node: Node) -> Doc {
 pub(super) fn type_declaration(ctx: &mut Ctx, node: Node) -> Doc {
     let mut docs = vec![print_attribute_lists(ctx, node), print_modifiers(ctx, node)];
 
-    let keyword = kids_anon(node, &["class", "struct", "interface"]).unwrap();
-    docs.push(print_token_with_suffix(ctx, keyword, " "));
-    docs.push(print_token(ctx, field(node, "name").unwrap()));
+    // record, record class, record struct, class, struct, interface
+    let name = field(node, "name").unwrap();
+    for k in children(node) {
+        if !k.is_named() && k.start_byte() < name.start_byte()
+            && matches!(k.kind(), "record" | "class" | "struct" | "interface")
+        {
+            docs.push(print_token_with_suffix(ctx, k, " "));
+        }
+    }
+    docs.push(print_token(ctx, name));
 
     if let Some(tpl) = child_of_kind(node, "type_parameter_list") {
         docs.push(type_parameter_list(ctx, tpl));
@@ -1302,16 +1356,21 @@ pub(super) fn equals_value_clause(ctx: &mut Ctx, parent: Node, equals: Node, val
 }
 
 pub(super) fn property_declaration(ctx: &mut Ctx, node: Node) -> Doc {
-    let mut docs = vec![
-        print_attribute_lists(ctx, node),
-        print_modifiers(ctx, node),
-        print(ctx, field(node, "type").unwrap()),
-        Doc::text(" "),
-    ];
+    let mut docs = vec![print_attribute_lists(ctx, node), print_modifiers(ctx, node)];
+    if let Some(e) = kw(node, "event") {
+        docs.push(print_token_with_suffix(ctx, e, " "));
+    }
+    docs.push(print(ctx, field(node, "type").unwrap()));
+    docs.push(Doc::text(" "));
     if let Some(spec) = child_of_kind(node, "explicit_interface_specifier") {
         docs.push(concat_children(ctx, spec));
     }
-    docs.push(print_token(ctx, field(node, "name").unwrap()));
+    if let Some(this_kw) = kw(node, "this") {
+        docs.push(print_token(ctx, this_kw));
+        docs.push(parameter_list(ctx, field(node, "parameters").unwrap()));
+    } else {
+        docs.push(print_token(ctx, field(node, "name").unwrap()));
+    }
     if let Some(accessors) = field(node, "accessors") {
         docs.push(accessor_list(ctx, accessors));
     } else if let Some(arrow) = child_of_kind(node, "arrow_expression_clause") {
@@ -1425,9 +1484,27 @@ pub(super) fn method_declaration(ctx: &mut Ctx, node: Node) -> Doc {
     if !modifiers(node).is_empty() {
         decl.push(print_modifiers(ctx, node));
     }
-    if let Some(ret) = field(node, "returns").or_else(|| field(node, "type")) {
+    if node.kind() == "conversion_operator_declaration" {
+        for k in children(node) {
+            if matches!(k.kind(), "implicit" | "explicit" | "operator" | "checked") && !k.is_named() {
+                decl.push(print_token_with_suffix(ctx, k, " "));
+            }
+        }
+        decl.push(print(ctx, field(node, "type").unwrap()));
+    } else if let Some(ret) = field(node, "returns").or_else(|| field(node, "type")) {
         decl.push(print(ctx, ret));
         decl.push(Doc::text(" "));
+    }
+    if node.kind() == "operator_declaration" {
+        if let Some(spec) = child_of_kind(node, "explicit_interface_specifier") {
+            decl.push(concat_children(ctx, spec));
+        }
+        for k in children(node) {
+            if matches!(k.kind(), "operator" | "checked") && !k.is_named() {
+                decl.push(print_token_with_suffix(ctx, k, " "));
+            }
+        }
+        decl.push(print_token(ctx, field(node, "operator").unwrap()));
     }
     if node.kind() == "destructor_declaration" {
         decl.push(print_token(ctx, kw(node, "~").unwrap()));
@@ -1604,7 +1681,19 @@ pub(super) fn optional_braces(ctx: &mut Ctx, node: Node) -> Doc {
 pub(super) fn expression_statement(ctx: &mut Ctx, node: Node) -> Doc {
     let kids = children(node);
     let semicolon = *kids.last().unwrap();
-    let semicolon_leading = print_leading_trivia(ctx, semicolon);
+    let mut semicolon_leading = print_leading_trivia(ctx, semicolon);
+    if kids[0].kind() == "invocation_expression" {
+        if let Doc::Concat(list) = &semicolon_leading {
+            let fix = {
+                let l = list.borrow();
+                l.len() > 1 && is_hard_line(l.last().unwrap()) && matches!(l[0], Doc::LeadingComment(_))
+            };
+            if fix {
+                list.borrow_mut().pop();
+                semicolon_leading = concat![Doc::indent_of(semicolon_leading.clone()), Doc::hard_line()];
+            }
+        }
+    }
     group!(
         extra_new_lines(ctx, node),
         print(ctx, kids[0]),
@@ -1690,7 +1779,18 @@ pub(super) fn assignment_expression(ctx: &mut Ctx, node: Node) -> Doc {
     let left = field(node, "left").unwrap();
     let op = field(node, "operator").unwrap();
     let right = field(node, "right").unwrap();
-    let left_doc = concat![print(ctx, left), " "];
+    let possible_new_lines = match node.parent() {
+        Some(p) if p.kind() == "initializer_expression" => {
+            let first = children(p).into_iter().find(|c| !matches!(c.kind(), "{" | "}" | ","));
+            if first.map(|f| f.id()) != Some(node.id()) {
+                extra_new_lines(ctx, node)
+            } else {
+                Doc::Null
+            }
+        }
+        _ => Doc::Null,
+    };
+    let left_doc = concat![possible_new_lines, print(ctx, left), " "];
     let op_doc = print_token(ctx, op);
     right_hand_side(ctx, node, left_doc, op_doc, right)
 }
@@ -1698,7 +1798,7 @@ pub(super) fn assignment_expression(ctx: &mut Ctx, node: Node) -> Doc {
 /// (left, operator, right) of anything Roslyn models as a BinaryExpression
 pub(super) fn binary_parts<'t>(ctx: &Ctx, node: Node<'t>) -> Option<(Node<'t>, Node<'t>, Node<'t>)> {
     match node.kind() {
-        "binary_expression" | "as_expression" => Some((
+        "binary_expression" | "as_expression" | "is_expression" => Some((
             field(node, "left")?,
             field(node, "operator")?,
             field(node, "right")?,
@@ -2333,4 +2433,51 @@ fn with_initializer(ctx: &mut Ctx, node: Node) -> Doc {
     let left = concat![print(ctx, kids[0]), " "];
     let op = print_token(ctx, kids[1]);
     right_hand_side(ctx, node, left, op, kids[2])
+}
+
+fn function_pointer_type(ctx: &mut Ctx, node: Node) -> Doc {
+    let kids = children(node);
+    let mut docs = Vec::new();
+    let mut params: Vec<Node> = Vec::new();
+    let mut open = None;
+    let mut close = None;
+    for k in &kids {
+        match k.kind() {
+            "delegate" => docs.push(print_token(ctx, *k)),
+            "*" => docs.push(print_token_with_suffix(ctx, *k, " ")),
+            "calling_convention" => {
+                let ck = children(*k);
+                let mut d = vec![print_token(ctx, ck[0])];
+                if ck.len() > 1 {
+                    d.push(print_token(ctx, ck[1]));
+                    let names: Vec<Doc> = ck[2..ck.len() - 1].iter().map(|n| print_token(ctx, *n)).collect();
+                    d.push(Doc::join(Doc::text(" "), names));
+                    d.push(print_token(ctx, *ck.last().unwrap()));
+                }
+                docs.push(Doc::concat(d));
+            }
+            "<" => open = Some(*k),
+            ">" => close = Some(*k),
+            "," => {}
+            _ => params.push(*k),
+        }
+    }
+    docs.push(print_token(ctx, open.unwrap()));
+    let seps: Vec<Node> = kids.iter().copied().filter(|k| k.kind() == ",").collect();
+    docs.push(Doc::indent(vec![Doc::group(vec![
+        Doc::soft_line(),
+        separated_list(ctx, &params, &seps, function_pointer_parameter, Doc::line(), 0),
+    ])]));
+    docs.push(print_token(ctx, close.unwrap()));
+    Doc::concat(docs)
+}
+
+fn function_pointer_parameter(ctx: &mut Ctx, node: Node) -> Doc {
+    if node.kind() == "function_pointer_parameter" {
+        let mut docs = vec![print_attribute_lists(ctx, node), print_modifiers(ctx, node)];
+        docs.push(print(ctx, field(node, "type").unwrap_or(children(node)[0])));
+        Doc::concat(docs)
+    } else {
+        print(ctx, node)
+    }
 }

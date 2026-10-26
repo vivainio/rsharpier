@@ -5,6 +5,7 @@ mod exprs;
 pub mod ignore;
 mod members;
 mod patterns;
+mod query;
 mod strings;
 mod stmts;
 mod nodes;

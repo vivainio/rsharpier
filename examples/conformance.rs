@@ -33,6 +33,7 @@ fn main() {
     let (mut pass, mut pass_verbatim, mut fail, mut syntax, mut unhandled_files) = (0, 0, 0, 0, 0);
     let mut unhandled_kinds: BTreeMap<String, usize> = BTreeMap::new();
     let mut failures = Vec::new();
+    let mut verbatim_files: Vec<String> = Vec::new();
 
     for file in &files {
         let name = file.file_stem().unwrap().to_string_lossy().to_string();
@@ -72,6 +73,10 @@ fn main() {
                     } else {
                         // only passes because unhandled nodes were copied through unchanged
                         pass_verbatim += 1;
+                        for k in r.unhandled.iter().collect::<std::collections::BTreeSet<_>>() {
+                            *unhandled_kinds.entry(k.clone()).or_default() += 1;
+                        }
+                        verbatim_files.push(name.clone());
                     }
                 } else {
                     if !r.unhandled.is_empty() {
@@ -109,6 +114,9 @@ fn main() {
     println!("\nmost common unhandled node kinds (files affected):");
     for (k, n) in kinds.iter().take(25) {
         println!("  {n:4} {k}");
+    }
+    if !verbatim_files.is_empty() {
+        println!("\npassing only through verbatim fallback: {}", verbatim_files.join(", "));
     }
     if !verbose {
         println!("\nfailures:");

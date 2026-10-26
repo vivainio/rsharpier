@@ -92,18 +92,17 @@ pub fn binary_pattern(ctx: &mut Ctx, node: Node) -> Doc {
 }
 
 fn subpattern_positional(ctx: &mut Ctx, node: Node) -> Doc {
-    let mut docs = Vec::new();
-    for c in children(node) {
-        match c.kind() {
-            "name_colon" => {
-                let nc = children(c);
-                docs.push(print(ctx, nc[0]));
-                docs.push(print_token_with_suffix(ctx, nc[1], " "));
-            }
-            _ => docs.push(print(ctx, c)),
-        }
+    let kids = children(node);
+    if kids.len() == 3 {
+        let pattern = kids[2];
+        let suffix = if pattern.kind() == "recursive_pattern" && field(pattern, "type").is_none() {
+            Doc::line()
+        } else {
+            Doc::text(" ")
+        };
+        return concat![print(ctx, kids[0]), print_token_with_suffix(ctx, kids[1], suffix), print(ctx, pattern)];
     }
-    Doc::concat(docs)
+    Doc::concat(kids.iter().map(|c| print(ctx, *c)).collect())
 }
 
 fn subpattern_property(ctx: &mut Ctx, node: Node) -> Doc {

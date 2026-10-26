@@ -583,7 +583,8 @@ pub fn initializer_expression(ctx: &mut Ctx, node: Node) -> Doc {
         parent_kind,
         "object_creation_expression"
             | "array_creation_expression"
-            | "stackalloc_array_creation_expression"
+            | "stackalloc_expression"
+            | "implicit_stackalloc_expression"
             | "implicit_array_creation_expression"
             | "implicit_object_creation_expression"
     ) || kind == InitKind::With;

@@ -133,7 +133,17 @@ pub fn print(ctx: &mut Ctx, node: Node) -> Doc {
             }
             Doc::concat(docs)
         }
-        "nullable_type" | "array_type" | "pointer_type" | "tuple_type" => concat_children(ctx, node),
+        "nullable_type" | "array_type" | "pointer_type" => concat_children(ctx, node),
+        "tuple_type" | "tuple_pattern" => {
+            let kids = children(node);
+            let (items, seps) = list_parts(node, true);
+            group!(
+                print_token(ctx, kids[0]),
+                indent!(Doc::soft_line(), separated_list(ctx, &items, &seps, print, Doc::line(), 0)),
+                Doc::soft_line(),
+                print_token(ctx, *kids.last().unwrap())
+            )
+        }
         "await_expression" => {
             let kids = children(node);
             concat![print_token_with_suffix(ctx, kids[0], " "), print(ctx, kids[1])]
@@ -802,7 +812,7 @@ pub(super) fn print_attribute_lists(ctx: &mut Ctx, node: Node) -> Doc {
     if lists.is_empty() {
         return Doc::Null;
     }
-    let separator = if matches!(node.kind(), "type_parameter" | "parameter" | "accessor_declaration")
+    let separator = if matches!(node.kind(), "type_parameter" | "parameter" | "accessor_declaration" | "lambda_expression")
     {
         Doc::line()
     } else {
@@ -1090,7 +1100,7 @@ pub(super) fn variable_declaration(ctx: &mut Ctx, node: Node) -> Doc {
     let variable = declarators[0];
     let kids = children(variable);
     let name = field(variable, "name").unwrap_or(kids[0]);
-    let mut left_docs = vec![print(ctx, ty), Doc::text(" "), print_token(ctx, name)];
+    let mut left_docs = vec![print(ctx, ty), Doc::text(" "), print_child(ctx, name)];
     for c in &kids {
         if c.kind() == "bracketed_argument_list" {
             left_docs.push(print(ctx, *c));

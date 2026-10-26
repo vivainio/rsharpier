@@ -18,10 +18,12 @@ use ignore_file::IgnoreFile;
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum LogLevel {
+    Trace,
     Debug,
     Information,
     Warning,
     Error,
+    Critical,
     None,
 }
 

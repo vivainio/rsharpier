@@ -18,10 +18,12 @@ enum LogFormatArg {
 
 #[derive(Clone, Copy, ValueEnum)]
 enum LogLevelArg {
+    Trace,
     Debug,
     Information,
     Warning,
     Error,
+    Critical,
     None,
 }
 
@@ -109,10 +111,12 @@ fn common_options(c: Common) -> CommandLineOptions {
             LogFormatArg::MsBuild => LogFormat::MsBuild,
         },
         log_level: match c.log_level {
+            LogLevelArg::Trace => LogLevel::Trace,
             LogLevelArg::Debug => LogLevel::Debug,
             LogLevelArg::Information => LogLevel::Information,
             LogLevelArg::Warning => LogLevel::Warning,
             LogLevelArg::Error => LogLevel::Error,
+            LogLevelArg::Critical => LogLevel::Critical,
             LogLevelArg::None => LogLevel::None,
         },
         ..Default::default()

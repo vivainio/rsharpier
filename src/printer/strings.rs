@@ -227,7 +227,7 @@ fn raw_interpolated(ctx: &mut Ctx, node: Node, kids: &[Node]) -> Doc {
         if is_last_text {
             // the closing delimiter line is not content
             if let Some(pos) = value.rfind('\n') {
-                value.truncate(pos + 1);
+                value.truncate(pos);
             }
         }
         if value.is_empty() {

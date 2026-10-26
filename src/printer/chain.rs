@@ -87,6 +87,7 @@ pub fn print_member_chain(ctx: &mut Ctx, node: Node) -> Doc {
             Kind::Other(n) => {
                 let text = ctx.text(*n);
                 (n.kind() == "raw_string_literal" && text.contains('\n'))
+                    || super::strings::is_raw_interpolated_multiline(ctx, *n)
                     || (matches!(n.kind(), "string_literal" | "verbatim_string_literal")
                         && text.contains('\n'))
             }

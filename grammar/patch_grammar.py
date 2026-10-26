@@ -72,6 +72,10 @@ rep("""    conditional_access_expression: $ => prec.right(PREC.CONDITIONAL, seq(
     conditional_access_expression: $ => prec.left(PREC.POSTFIX, seq(
       field('condition', $._access_target),""")
 
+# `new List<(int a, int b)> { }` is a generic name, not `new List < (...) > { }`
+rep("generic_name: $ => seq($.identifier, $.type_argument_list),",
+    "generic_name: $ => prec.dynamic(20, seq($.identifier, $.type_argument_list)),")
+
 open("tree-sitter-c-sharp/grammar.js", "w").write(s)
 
 for i in range(30):

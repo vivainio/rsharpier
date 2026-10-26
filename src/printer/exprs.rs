@@ -354,7 +354,7 @@ fn conditional_regular(ctx: &mut Ctx, node: Node) -> Doc {
         Doc::concat(vec![f]),
     ];
     let condition_doc = if parent_kind == "return_statement"
-        && matches!(condition.kind(), "binary_expression" | "is_pattern_expression")
+        && (is_binary_like(ctx, condition) || condition.kind() == "is_pattern_expression")
     {
         Doc::indent(vec![Doc::group_of(concat![
             Doc::if_break(Doc::soft_line(), Doc::Null, None),

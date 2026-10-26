@@ -1771,7 +1771,7 @@ pub(super) fn return_statement(ctx: &mut Ctx, node: Node) -> Doc {
         extra_new_lines(ctx, node),
         print_token_with_suffix(ctx, kids[0], if expr.is_some() { " " } else { "" }),
         match expr {
-            Some(e) if matches!(e.kind(), "binary_expression" | "query_expression") =>
+            Some(e) if is_binary_like(ctx, *e) || e.kind() == "query_expression" =>
                 Doc::indent_of(print(ctx, *e)),
             Some(e) => print(ctx, *e),
             None => Doc::Null,
@@ -2174,10 +2174,13 @@ fn determine_layout(ctx: &Ctx, left_node: Node, right: Node) -> Layout {
     let condition_kind = field(right, "condition").map(|c| c.kind()).unwrap_or("");
     let is_conditional = rk == "conditional_expression";
     if is_conditional
-        && (matches!(condition_kind, "binary_expression" | "parenthesized_expression")
+        && (condition_kind == "parenthesized_expression" || field(right, "condition").map(|c| is_binary_like(ctx, c)).unwrap_or(false)
             || (field(right, "alternative").map(|a| a.kind() == "conditional_expression").unwrap_or(false)
                 && field(right, "consequence").map(|a| a.kind() != "conditional_expression").unwrap_or(true)))
     {
+        return Layout::BreakAfterOperator;
+    }
+    if is_binary_like(ctx, right) {
         return Layout::BreakAfterOperator;
     }
     match rk {

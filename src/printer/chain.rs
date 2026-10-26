@@ -49,7 +49,7 @@ pub fn print_member_chain(ctx: &mut Ctx, node: Node) -> Doc {
     };
 
     let one_line: Vec<Doc> = groups.iter().flatten().map(|p| p.doc.clone()).collect();
-    let merge = should_merge_first_two_groups(&groups, parent);
+    let merge = should_merge_first_two_groups(ctx, &groups, parent);
     let cutoff = if merge { 3 } else { 2 };
 
     let last_is_chainable = |p: &Printed| {
@@ -303,7 +303,7 @@ fn print_indented_group(groups: &[Vec<&Printed>]) -> Doc {
     Doc::indent_of(Doc::group(result))
 }
 
-fn should_merge_first_two_groups(groups: &[Vec<&Printed>], parent: Option<Node>) -> bool {
+fn should_merge_first_two_groups(ctx: &Ctx, groups: &[Vec<&Printed>], parent: Option<Node>) -> bool {
     if groups.len() < 2 || groups[0].len() != 1 {
         return false;
     }
@@ -317,7 +317,7 @@ fn should_merge_first_two_groups(groups: &[Vec<&Printed>], parent: Option<Node>)
     }
     let parent_ok = parent
         .map(|p| {
-            matches!(p.kind(), "argument" | "binary_expression" | "expression_statement")
+            (matches!(p.kind(), "argument" | "expression_statement") || is_binary_like(ctx, p))
                 || (p.kind() == "lambda_expression"
                     && field(p, "parameters").map(|x| x.kind() == "implicit_parameter").unwrap_or(false))
         })

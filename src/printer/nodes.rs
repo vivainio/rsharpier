@@ -127,6 +127,51 @@ pub fn print(ctx: &mut Ctx, node: Node) -> Doc {
         "delegate_declaration" => delegate_declaration(ctx, node),
         "enum_declaration" => enum_declaration(ctx, node),
         "enum_member_declaration" => enum_member_declaration(ctx, node),
+        "list_pattern" => {
+            let kids = children(node);
+            let open = kids[0];
+            let close_idx = kids.iter().rposition(|c| c.kind() == "]").unwrap();
+            let close = kids[close_idx];
+            let inner = &kids[1..close_idx];
+            let items: Vec<Node> = inner.iter().copied().filter(|c| c.kind() != ",").collect();
+            let seps: Vec<Node> = inner.iter().copied().filter(|c| c.kind() == ",").collect();
+            let designation = kids.get(close_idx + 1).copied();
+            group!(
+                print_token(ctx, open),
+                indent!(
+                    Doc::soft_line(),
+                    separated_list_with_closing(ctx, &items, &seps, print, Doc::line(), 0, Some(close))
+                ),
+                Doc::soft_line(),
+                print_token(ctx, close),
+                match designation {
+                    Some(d) => concat![" ", print_child(ctx, d)],
+                    None => Doc::Null,
+                }
+            )
+        }
+        "slice_pattern" => {
+            let kids = children(node);
+            if kids.len() == 1 {
+                print_token(ctx, kids[0])
+            } else {
+                concat![print_token(ctx, kids[0]), " ", print(ctx, kids[1])]
+            }
+        }
+        "var_pattern" => {
+            let kids = children(node);
+            concat![print_token_with_suffix(ctx, kids[0], " "), print_child(ctx, kids[1])]
+        }
+        "parenthesized_variable_designation" => {
+            let kids = children(node);
+            let (items, seps) = list_parts(node, true);
+            group!(
+                print_token(ctx, kids[0]),
+                indent!(Doc::soft_line(), separated_list(ctx, &items, &seps, print, Doc::line(), 0)),
+                Doc::soft_line(),
+                print_token(ctx, *kids.last().unwrap())
+            )
+        }
         "type_parameter_constraint" => {
             let kids = children(node);
             if kids.first().map(|k| k.kind() == "allows").unwrap_or(false) {

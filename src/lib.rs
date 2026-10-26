@@ -8,4 +8,4 @@ pub mod symbols;
 pub mod trivia;
 pub mod xml;
 
-pub use format::{format, FormatError, FormatResult};
+pub use format::{format, preprocessor_symbol_sets, FormatError, FormatResult};

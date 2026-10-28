@@ -8,6 +8,8 @@ produces the same output as CSharpier for the formatting tests of the .NET versi
 The goal is to produce output identical to CSharpier: any formatting deviation is a bug.
 rsharpier aims to be a faster, zero-dependency version of CSharpier.
 CSharpier is the upstream reference, so new features will land there first and be ported here.
+Behavior follows CSharpier 1.3.0 plus unreleased `main` changes up to commit `f0d3353e`
+(2026-10-05, 31 commits after the 1.3.0 tag), the revision the ported tests come from.
 It also uses the Roslyn C# compiler, which is a more authoritative source for C# syntax than
 our patched tree-sitter parser.
 

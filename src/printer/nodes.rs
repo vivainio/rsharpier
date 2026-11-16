@@ -1795,7 +1795,9 @@ pub(super) fn return_statement(ctx: &mut Ctx, node: Node) -> Doc {
         extra_new_lines(ctx, node),
         print_token_with_suffix(ctx, kids[0], if expr.is_some() { " " } else { "" }),
         match expr {
-            Some(e) if is_binary_like(ctx, *e) || e.kind() == "query_expression" =>
+            Some(e)
+                if (is_binary_like(ctx, *e) || e.kind() == "query_expression")
+                    && !is_coalesce_with_non_binary_left(ctx, *e) =>
                 Doc::indent_of(print(ctx, *e)),
             Some(e) => print(ctx, *e),
             None => Doc::Null,
@@ -1914,6 +1916,15 @@ pub(super) fn is_binary_like(ctx: &Ctx, node: Node) -> bool {
     binary_parts(ctx, node).is_some()
 }
 
+/// `a ?? b` where `a` is not itself a binary expression and the expression has no leading comment
+pub(super) fn is_coalesce_with_non_binary_left(ctx: &Ctx, node: Node) -> bool {
+    if node.kind() != "binary_expression" {
+        return false;
+    }
+    let Some((left, op, _)) = binary_parts(ctx, node) else { return false };
+    ctx.text(op) == "??" && !is_binary_like(ctx, left) && !ctx.leading_trivia(node).any_comment()
+}
+
 pub(super) fn binary_expression(ctx: &mut Ctx, node: Node) -> Doc {
     let docs = print_binary(ctx, node);
     let parent_kind = node.parent().map(|p| p.kind()).unwrap_or("");
@@ -1930,12 +1941,12 @@ pub(super) fn binary_expression(ctx: &mut Ctx, node: Node) -> Doc {
             | "equals_value_clause"
             | "variable_declarator"
             | "parenthesized_expression"
-            | "return_statement"
             | "switch_expression"
             | "switch_statement"
             | "where_clause"
             | "while_statement"
-    ) || (parent_kind == "lambda_expression")
+    ) || (parent_kind == "return_statement" && !is_coalesce_with_non_binary_left(ctx, node))
+        || (parent_kind == "lambda_expression")
         || (parent_kind == "conditional_expression"
             && field(node.parent().unwrap(), "consequence").map(|n| n.id()) != Some(node.id())
             && field(node.parent().unwrap(), "alternative").map(|n| n.id()) != Some(node.id()));
@@ -2127,6 +2138,7 @@ enum Layout {
     BasicConcatWithoutLine,
     BasicConcatWithSpace,
     BreakAfterOperator,
+    BreakBeforeCoalesce,
     Chain,
     ChainTail,
     Fluid,
@@ -2142,6 +2154,24 @@ pub(super) fn right_hand_side(ctx: &mut Ctx, left_node: Node, left: Doc, operato
             operator,
             Doc::group_of(Doc::indent(vec![Doc::line(), print(ctx, right)]))
         ),
+        Layout::BreakBeforeCoalesce => {
+            let id = Doc::next_group_id();
+            let mut docs = print_binary(ctx, right);
+            let rest = docs.split_off(1);
+            let first = docs.pop().unwrap();
+            group!(
+                Doc::group_of(left),
+                operator,
+                Doc::group_with_id(id, vec![Doc::indent(vec![Doc::line()])]),
+                Doc::indent_if_break(
+                    Doc::group(vec![
+                        first,
+                        Doc::if_break(Doc::concat(rest.clone()), Doc::indent(rest), Some(id)),
+                    ]),
+                    id
+                )
+            )
+        }
         Layout::Chain => concat![Doc::group_of(left), operator, Doc::line(), print(ctx, right)],
         Layout::ChainTail => concat![
             Doc::group_of(left),
@@ -2210,6 +2240,9 @@ fn determine_layout(ctx: &Ctx, left_node: Node, right: Node) -> Layout {
                 && field(right, "consequence").map(|a| a.kind() != "conditional_expression").unwrap_or(true)))
     {
         return Layout::BreakAfterOperator;
+    }
+    if is_coalesce_with_non_binary_left(ctx, right) {
+        return Layout::BreakBeforeCoalesce;
     }
     if is_binary_like(ctx, right) {
         return Layout::BreakAfterOperator;

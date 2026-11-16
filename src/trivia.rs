@@ -21,6 +21,8 @@ pub enum DirectiveKind {
     EndIf,
     Region,
     EndRegion,
+    /// a #region or #endregion inside an inactive #if branch (Roslyn: `IsActive == false`)
+    InactiveRegion,
     PragmaWarning,
     PragmaChecksum,
     Define,
@@ -275,6 +277,13 @@ pub fn preprocess(src: &str, protected: &[(usize, usize)], symbols: &[String]) -
             _ => {}
         }
 
+        let kind = if matches!(kind, DirectiveKind::Region | DirectiveKind::EndRegion)
+            && !frames.last().map(|f| f.active).unwrap_or(true)
+        {
+            DirectiveKind::InactiveRegion
+        } else {
+            kind
+        };
         result.directives.push(Directive {
             start: hash_offset,
             text_end: line_start + line.trim_end().len(),

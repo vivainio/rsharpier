@@ -8,8 +8,8 @@ produces the same output as CSharpier for the formatting tests of the .NET versi
 The goal is to produce output identical to CSharpier: any formatting deviation is a bug.
 rsharpier aims to be a faster, zero-dependency version of CSharpier.
 CSharpier is the upstream reference, so new features will land there first and be ported here.
-Behavior follows CSharpier 1.3.0 plus unreleased `main` changes up to commit `f0d3353e`
-(2026-10-05, 31 commits after the 1.3.0 tag), the revision the ported tests come from.
+Behavior follows CSharpier 1.4.0 plus unreleased `main` changes up to commit `2132e61f`
+(2026-11-14, 3 commits after the 1.4.0 tag), the revision the ported tests come from.
 It also uses the Roslyn C# compiler, which is a more authoritative source for C# syntax than
 our patched tree-sitter parser.
 
@@ -43,16 +43,16 @@ cargo run --release --example conformance [dir] [-v] [name]   # per file results
 
 | | |
 |---|---|
-| `FormattingTests/TestFiles/cs` | 208 / 208 |
+| `FormattingTests/TestFiles/cs` | 209 / 209 |
 | `csx`, `xml_strict`, `xml_ignore` | all |
 | `DocPrinterTests` | all 55 |
 | `PreprocessorSymbolsTests`, `LineEndingTests`, `CSharpFormatterTests`, `DeepRecursionTests` | ported |
 | `OptionsProviderTests`, `CommandLineFormatterTests`, ignore file tests | the main scenarios ported (`tests/options_provider.rs`, `tests/cli.rs`) |
 
 Against real code, `cargo run --release --example selfcheck <dir>` formats every `.cs` file below a
-directory (`IDEM=1` formats the output a second time). On CSharpier's own sources 370 of 380
-files come out byte for byte the same (the rest were formatted with an older version of the
-.NET formatter). On more than 25,000 files from other repositories (about 4.5 million lines)
+directory (`IDEM=1` formats the output a second time). On CSharpier's own sources 379 of 380
+files come out byte for byte the same (the other is a benchmark sample that is not valid C#). On
+more than 25,000 files from other repositories (about 4.5 million lines)
 formatting never panicked, kept all tokens, and was idempotent for all but two files.
 
 ## How it works

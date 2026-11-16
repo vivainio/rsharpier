@@ -266,16 +266,26 @@ fn private_print_leading_trivia(
             TriviaKind::Directive(dk)
                 if matches!(
                     dk,
-                    crate::trivia::DirectiveKind::Region | crate::trivia::DirectiveKind::EndRegion
+                    crate::trivia::DirectiveKind::Region
+                        | crate::trivia::DirectiveKind::EndRegion
+                        | crate::trivia::DirectiveKind::InactiveRegion
                 ) =>
             {
                 let text = trivia.text.trim_end_matches(['\n', '\r']).to_string();
                 docs.push(Doc::hard_line_if_no_previous_line());
                 docs.push(Doc::Trim);
-                docs.push(if dk == crate::trivia::DirectiveKind::Region {
-                    Doc::begin_region(text)
-                } else {
-                    Doc::end_region(text)
+                docs.push(match dk {
+                    // regions in disabled text are kept as they are, including their indentation
+                    crate::trivia::DirectiveKind::InactiveRegion => {
+                        let whitespace = if x > 0 && leading[x - 1].kind == TriviaKind::Whitespace {
+                            leading[x - 1].text.clone()
+                        } else {
+                            String::new()
+                        };
+                        Doc::directive(whitespace + &text)
+                    }
+                    crate::trivia::DirectiveKind::Region => Doc::begin_region(text),
+                    _ => Doc::end_region(text),
                 });
                 docs.push(Doc::hard_line());
             }

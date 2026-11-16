@@ -139,6 +139,9 @@ rep("      $.parenthesized_expression,\n      $.checked_expression,\n    ),", " 
 # `[..]` can be a collection expression or a list pattern, let both parse
 rep("  conflicts: $ => [\n", "  conflicts: $ => [\n    [$.range_expression, $.slice_pattern],\n")
 
+# `*(uint*)p` dereferences a cast, not only lvalues
+rep("      '*',\n      $.lvalue_expression,\n    )),", "      '*',\n      choice($.lvalue_expression, alias($._pointer_cast_expression, $.cast_expression)),\n    )),\n\n    _pointer_cast_expression: $ => prec(PREC.CAST, seq(\n      '(',\n      field('type', $.type),\n      ')',\n      field('value', choice($.lvalue_expression, $.parenthesized_expression)),\n    )),")
+
 open("tree-sitter-c-sharp/grammar.js", "w").write(s)
 
 for i in range(30):

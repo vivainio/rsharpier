@@ -76,7 +76,19 @@ fn should_indent_argument_list(ctx: &Ctx, node: Node) -> bool {
     if !function_ok {
         return false;
     }
-    let Some(parent) = invocation.parent() else { return false };
+    let Some(mut parent) = invocation.parent() else { return false };
+    // tree-sitter nests `a(..)?.b()` as an invocation of a conditional access, Roslyn nests the
+    // invocation inside of the conditional access, so skip the extra invocation level
+    while parent.kind() == "conditional_access_expression" {
+        let Some(outer) = parent.parent() else { return false };
+        if outer.kind() != "invocation_expression" || field(outer, "function").map(|f| f.id()) != Some(parent.id()) {
+            break;
+        }
+        parent = match outer.parent() {
+            Some(p) => p,
+            None => return false,
+        };
+    }
     let is_invocation = |n: Option<Node>| n.map(|n| n.kind() == "invocation_expression").unwrap_or(false);
     is_invocation(parent.parent())
         || (parent.kind() == "postfix_unary_expression" && is_invocation(parent.parent().and_then(|p| p.parent())))

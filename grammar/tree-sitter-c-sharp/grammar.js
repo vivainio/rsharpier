@@ -1542,7 +1542,14 @@ export default grammar({
 
     _pointer_indirection_expression: $ => prec.right(PREC.UNARY, seq(
       '*',
-      $.lvalue_expression,
+      choice($.lvalue_expression, alias($._pointer_cast_expression, $.cast_expression)),
+    )),
+
+    _pointer_cast_expression: $ => prec(PREC.CAST, seq(
+      '(',
+      field('type', $.type),
+      ')',
+      field('value', choice($.lvalue_expression, $.parenthesized_expression)),
     )),
 
     query_expression: $ => seq($.from_clause, $._query_body),

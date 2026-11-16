@@ -4573,7 +4573,7 @@
     "fields": {
       "name": {
         "multiple": false,
-        "required": false,
+        "required": true,
         "types": [
           {
             "type": "identifier",
@@ -4597,14 +4597,6 @@
       "required": false,
       "types": [
         {
-          "type": "alias_qualified_name",
-          "named": true
-        },
-        {
-          "type": "array_type",
-          "named": true
-        },
-        {
           "type": "attribute_list",
           "named": true
         },
@@ -4613,55 +4605,11 @@
           "named": true
         },
         {
-          "type": "function_pointer_type",
-          "named": true
-        },
-        {
-          "type": "generic_name",
-          "named": true
-        },
-        {
-          "type": "identifier",
-          "named": true
-        },
-        {
-          "type": "implicit_type",
-          "named": true
-        },
-        {
           "type": "modifier",
           "named": true
         },
         {
-          "type": "nullable_type",
-          "named": true
-        },
-        {
-          "type": "pointer_type",
-          "named": true
-        },
-        {
-          "type": "predefined_type",
-          "named": true
-        },
-        {
           "type": "preproc_if_in_attribute_list",
-          "named": true
-        },
-        {
-          "type": "qualified_name",
-          "named": true
-        },
-        {
-          "type": "ref_type",
-          "named": true
-        },
-        {
-          "type": "scoped_type",
-          "named": true
-        },
-        {
-          "type": "tuple_type",
           "named": true
         }
       ]
@@ -4859,6 +4807,10 @@
       "multiple": false,
       "required": true,
       "types": [
+        {
+          "type": "cast_expression",
+          "named": true
+        },
         {
           "type": "expression",
           "named": true
